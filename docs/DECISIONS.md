@@ -84,3 +84,4 @@ One entry per judgment call: date, decision, reason. Plan-level decisions are in
   - Licence: AGPL-3.0-only for the source. The Brix name, logos and visual identity are excluded (README), fonts keep their own licence.
   - Removed from the repository: the throwaway UI mocks and the internal legitimate-interest assessment (the access-log decision itself stays in PLAN sections 12 and 16).
   - The monitor workflow reads `MONITOR_STAGES` (public fields only, derived by `deploy-infra.sh`), never `STAGES_JSON`: GitHub Actions prints step environment in run logs, which are public for a public repository.
+- 2026-10-11: `esbuild` is also a root dev dependency (same pinned version as in `infra`). CDK's Lambda bundling runs `pnpm exec esbuild` from the directory of the lockfile, the repository root, so a fresh clone could not deploy without it.
