@@ -93,7 +93,7 @@ export function Shell({
             brix.money
           </a>
         </p>
-        <p class="flex flex-wrap gap-3">
+        <p class="flex flex-wrap gap-3 sm:basis-full">
           {BUILD_INFO.version === 'dev' ? (
             <span>dev</span>
           ) : (

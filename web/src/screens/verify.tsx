@@ -4,6 +4,7 @@ import { Lede, PageTitle, Panel } from '../ui/kit.tsx';
 import {
   ALL_FILES_COMMAND,
   ATTEST_COMMAND,
+  COMMIT_COMMAND,
   HAR_COMMAND,
   HASH_COMMAND,
   MANIFEST_COMMAND,
@@ -46,35 +47,53 @@ export function VerifyScreen() {
           <P>
             The release’s index.html pins the entry script and stylesheet with integrity hashes the
             browser enforces. The application bundles all code that handles secrets into that
-            script, so matching index.html pins that code. Use GitHub and your own tools to check; a
-            badge on this page would prove nothing.
+            script. Every page path must return byte-identical index.html: check the exact URL you
+            are about to use. Use GitHub and your own tools; a badge on this page would prove
+            nothing.
           </P>
         </Panel>
         <Panel>
           <H>Check it yourself</H>
           <P>
-            1. Read the deployed version. This is a label, not proof; confirm it independently on
-            GitHub.
+            1. Read the version from the exact URL you are about to use: / for creating a secret,
+            /s/&lt;id&gt; for revealing one, or /m/&lt;id&gt; for managing it. Remove the #fragment
+            first; it contains the key or manage token and is never sent to the server. The version
+            is a label, not proof.
           </P>
           <Code>{VERSION_COMMAND}</Code>
           <P>
-            2. Open{' '}
+            2. Confirm that the served version is{' '}
+            <a href={`${REPOSITORY}/releases/latest`} class="text-white underline">
+              the latest release on GitHub
+            </a>
+            . An older legitimate release still passes its hash checks; if an older version is
+            served live, something is wrong. Open{' '}
             <a href={releaseUrl} class="text-white underline">
-              the GitHub release
+              the release
             </a>{' '}
-            and find /index.html in the hash table, or download its manifest.json and read that
-            entry. Never take the expected hash from this site.
+            and find /index.html in its hash table, or download manifest.json and read that entry.
+            Never take the expected hash from this site.
           </P>
           <Code>{MANIFEST_COMMAND}</Code>
           <P>
-            3. Optionally verify the manifest with the GitHub CLI. Check the reported workflow, tag
-            and commit against the release. Restricting the signer and source ref binds the check to
-            the release workflow and chosen tag.
+            3. Confirm that the release’s full commit SHA is on main. Open its GitHub commit page
+            and check the listed branches, or use the commands below in a clone. A tag name or an
+            attestation alone does not establish that the code went through review.
+          </P>
+          <Code>{COMMIT_COMMAND}</Code>
+          <P>
+            Optionally verify the manifest with the GitHub CLI. Check its reported commit against
+            the release commit you just checked. The signer and source-ref restrictions check the
+            workflow and tag name; they do not prove that the commit was reviewed or belongs to
+            main.
           </P>
           <Code>{ATTEST_COMMAND}</Code>
           <P>
-            4. Hash the served document on macOS or Linux and compare the result with the manifest’s
-            /index.html entry. Equality means this response matches that release.
+            4. Hash the response from that same exact URL on macOS or Linux and compare it with the
+            manifest’s /index.html entry. Checking /index.html alone cannot detect a different
+            document served on a share link. Every path must return the same bytes. --compressed
+            hashes the decompressed body, matching the manifest. Use your browser’s user agent;
+            response headers must show Cache-Control: no-store.
           </P>
           <Code>{HASH_COMMAND}</Code>
           <P>On Windows, download the response with PowerShell and hash the file:</P>
@@ -87,14 +106,19 @@ export function VerifyScreen() {
             response.
           </P>
           <P>
-            If you have a Network HAR export with response content, extract the original document
-            entry without adding a newline, then compare its hash. Check that there is exactly one
-            matching entry and that its content.text is present; an export without response bodies
-            cannot verify the document. This extraction is tested against Playwright HAR recordings
-            in Chromium, Firefox and WebKit; it does not validate native Chrome, Firefox or Safari
-            export menus. Browser-specific UI instructions await that validation.
+            Open DevTools’ Network panel, load the exact URL without its #fragment, and export a HAR
+            with response content as browser.har. Loading /s/&lt;id&gt; does not consume a
+            retrieval; only clicking Reveal does. Select the document response, not an API response.
+            Extract it without adding a newline and compare with the manifest’s /index.html hash.
+            The commands require exactly one matching response with content. Browser-menu exports
+            have not been checked in every browser.
           </P>
           <Code>{HAR_COMMAND}</Code>
+          <P>
+            Brix Share registers no service workers. In Chrome DevTools &gt; Application &gt;
+            Service workers, there must be none for share.brix.money. If one is present, unregister
+            it, reload and repeat the checks.
+          </P>
           <H>Optional: check every file</H>
           <P>This also covers the proof-of-work worker and static assets.</P>
           <Code>{ALL_FILES_COMMAND}</Code>

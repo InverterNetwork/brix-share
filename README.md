@@ -64,25 +64,41 @@ The full threat model is PLAN section 4.
 
 Encryption happens in your browser: the code it loads decides whether your secret stays private. Brix Share is open source, its web build is reproducible, and every release publishes SHA-256 hashes of every served file on GitHub, with an artifact attestation signing the manifest. Anyone can rebuild the tag and compare with the manifest; that reproducibility is the underlying root of trust.
 
-The release's `index.html` pins the entry script and stylesheet with Subresource Integrity hashes the browser enforces. All code that handles secrets is bundled into that script, so matching `index.html` pins that code. The expected hash must come from GitHub, never from the site being checked.
+The release's `index.html` pins the entry script and stylesheet with Subresource Integrity hashes the browser enforces. All code that handles secrets is bundled into that script. **Every page path must return byte-identical `index.html`: check the exact URL you are about to use.** Checking `/index.html` alone cannot detect a different document served on share links. The expected hash must come from GitHub, never from the site being checked.
 
-1. Read the deployed version (a label, not proof); confirm the tag independently on GitHub:
+1. Read the version from the exact URL you are about to use: `/` for creating a secret, `/s/<id>` for revealing one, or `/m/<id>` for managing it. Remove the `#fragment` first: it contains the key or manage token and is never sent to the server. The version is a label, not proof.
 
 ```sh
-curl -fsS https://share.brix.money/ | grep brix-share-version
+# Use the exact URL you are about to use, without its #fragment.
+url='https://share.brix.money/'
+# For a share link, replace <id> with its actual id:
+# url='https://share.brix.money/s/<id>'
+# Copy your browser's user agent here (this is an example):
+ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+curl -fsS --compressed -A "$ua" "$url" | grep brix-share-version
 ```
 
-2. Open `https://github.com/InverterNetwork/brix-share/releases/tag/<version>` and read `/index.html` in the release notes' hash table, or download the manifest and read that entry:
+2. Confirm that the served version is [the latest release on GitHub](https://github.com/InverterNetwork/brix-share/releases/latest). An older legitimate release still passes its hash checks; if an older version is served live, something is wrong. Open `https://github.com/InverterNetwork/brix-share/releases/tag/<version>` and read `/index.html` in its hash table, or download the manifest and read that entry:
 
 ```sh
-# Replace vX.Y.Z with the version you saw; inspect that release on GitHub too.
+# Replace vX.Y.Z with the latest release confirmed on GitHub.
 version=vX.Y.Z
 curl -fL "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -o manifest.json
 # Optional, with jq:
 jq -r '.files["/index.html"]' manifest.json
 ```
 
-3. Optionally verify the manifest with the [GitHub CLI](https://cli.github.com/manual/gh_attestation_verify). Check the reported workflow, tag and commit against the release. Repository verification alone does not select a particular tag; constrain the signer and source ref too:
+3. Confirm that the release's full commit SHA is on `main`. Open `https://github.com/InverterNetwork/brix-share/commit/<sha>` and check the listed branches, or use the commands below in a clone. A tag name or an attestation alone does not establish that the code went through review.
+
+```sh
+# In a clone of InverterNetwork/brix-share; paste the full release commit from GitHub.
+commit=FULL_RELEASE_COMMIT_SHA
+git fetch origin main
+git branch -r --contains "$commit"
+# The output must include origin/main.
+```
+
+Optionally verify the manifest with the [GitHub CLI](https://cli.github.com/manual/gh_attestation_verify). Check its reported commit against the release commit you just checked. The signer and source-ref restrictions check the workflow and tag name; they do not prove that the commit was reviewed or belongs to `main`:
 
 ```sh
 gh attestation verify manifest.json -R InverterNetwork/brix-share
@@ -94,55 +110,67 @@ gh attestation verify manifest.json -R InverterNetwork/brix-share \
 
 The attestation establishes where this manifest came from and detects replacement with different bytes; it does not prove the source is safe. Older releases predating attestations do not have one.
 
-4. Hash the served document on macOS or Linux:
+4. Hash the response from that same exact URL on macOS or Linux. `--compressed` hashes the decompressed body, matching the manifest. Use your browser's user agent; response headers must show `Cache-Control: no-store`:
 
 ```sh
-curl -fsS https://share.brix.money/index.html | shasum -a 256
+# Hash the same exact $url set above, without its #fragment.
+curl -fsS --compressed -A "$ua" "$url" | shasum -a 256
 # Linux:
-curl -fsS https://share.brix.money/index.html | sha256sum
+curl -fsS --compressed -A "$ua" "$url" | sha256sum
+# Response headers must show Cache-Control: no-store:
+curl -fsSI --compressed -A "$ua" "$url" | grep -i '^cache-control:'
 ```
 
-On Windows (PowerShell):
+On Windows (PowerShell), use that same URL without the fragment:
 
 ```powershell
-Invoke-WebRequest https://share.brix.money/index.html -OutFile index.html
+# Use the exact URL you are about to use, without its #fragment.
+$url = 'https://share.brix.money/'
+# For a share link: $url = 'https://share.brix.money/s/<id>'
+Invoke-WebRequest $url -OutFile index.html
 Get-FileHash index.html -Algorithm SHA256
 ```
 
-Compare with the manifest's `/index.html` entry (hex case does not matter). Equal hashes mean that response matches the release. This does not verify future loads, your browser or the server's access rules. Trust still depends on GitHub, the reviewed source and your own tools. If a hash differs or verification fails, **do not use the site**; report it to `security@brix.money`.
+Compare with the manifest's `/index.html` entry (hex case does not matter). Every path must return the same bytes. Equal hashes mean that response matches the release. This does not verify future loads, your browser or the server's access rules. Trust still depends on GitHub, the reviewed source and your own tools. If a hash differs, an older release is served or verification fails, **do not use the site**; report it to `security@brix.money`.
 
 ### The copy your browser received
 
 A server could send curl the release but your browser a different document. Hashing the browser's original document response is stronger. “Save page as”, copying the DOM or copying view-source text can change bytes; do not treat those as the response.
 
-If you have a Network HAR export that includes response content, extract its document entry without adding a newline. Check there is exactly one matching entry and that `content.text` is present. An export without response bodies cannot verify the document. The extraction below is tested against Playwright HAR recordings in Chromium, Firefox and WebKit, including non-ASCII text and trailing newlines. Native Chrome, Firefox and Safari export menus have not been validated; browser-specific UI instructions await that validation. Keep captures limited to the public landing page, without creating or opening secrets.
+Open DevTools' Network panel, load the exact URL without its `#fragment`, and export a HAR with response content as `browser.har`. Loading `/s/<id>` does not consume a retrieval; only clicking Reveal does. Select the document response, not an API response. Extract it without adding a newline and compare with the manifest's `/index.html` hash. The commands require exactly one matching response with content. Browser-menu exports have not been checked in every browser.
 
 ```sh
-# Requires jq; use a HAR that includes response content.
-# Set url to the exact document URL your browser loaded.
-url=https://share.brix.money/
+# Requires jq; use the same exact $url, without its #fragment.
+# browser.har must contain exactly one response for that URL, with content.
 jq -e --arg url "$url" '[.log.entries[] | select(.request.url == $url)] | length == 1 and (.[0].response.content.text | type == "string")' browser.har
 jq -r --arg url "$url" '.log.entries[] | select(.request.url == $url) | .response.content.encoding // "text"' browser.har
 # If encoding is "text":
 jq -j --arg url "$url" '.log.entries[] | select(.request.url == $url) | .response.content.text' browser.har | shasum -a 256
-# If encoding is "base64" (Linux uses base64 --decode):
-jq -j --arg url "$url" '.log.entries[] | select(.request.url == $url) | .response.content.text' browser.har | base64 -D | shasum -a 256
+# If encoding is "base64" (macOS and Linux):
+jq -j --arg url "$url" '.log.entries[] | select(.request.url == $url) | .response.content.text' browser.har | base64 -d | shasum -a 256
 ```
+
+Brix Share registers no service workers. In Chrome DevTools > Application > Service workers, there must be none for `share.brix.money`. If one is present, unregister it, reload and repeat the checks.
 
 ### Optional: check every file
 
-This also checks the proof-of-work worker and static assets. Requires `jq` and bash:
+This also checks the proof-of-work worker and static assets. Requires `jq` and bash; the subshell keeps shell options and failures local to this check:
 
 ```bash
-# Requires jq. Run in bash; replace the base for a local build.
-set -o pipefail
-base=https://share.brix.money
-while IFS=$'\t' read -r path expected; do
-  actual=$(curl -fsS "$base$path" | shasum -a 256) || exit 1
-  actual=${actual%% *}
-  [ "$actual" = "$expected" ] || { echo "MISMATCH $path"; exit 1; }
-  echo "OK $path"
-done < <(jq -r '.files | to_entries[] | [.key, .value] | @tsv' manifest.json)
+# Requires jq and bash. Runs in a subshell so your shell stays unchanged.
+(
+  set -o pipefail
+  base=https://share.brix.money
+  ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+  # Validate the manifest before the loop; failed downloads or hashes stop this check.
+  jq -er '.files | to_entries[] | [.key, .value] | @tsv' manifest.json > /dev/null || exit 1
+  while IFS=$'\t' read -r path expected; do
+    actual=$(curl -fsS --compressed -A "$ua" "$base$path" | shasum -a 256) || exit 1
+    actual=${}actual%% *}
+    [ "$actual" = "$expected" ] || { echo "MISMATCH $path"; exit 1; }
+    echo "OK $path"
+  done < <(jq -r '.files | to_entries[] | [.key, .value] | @tsv' manifest.json)
+)
 ```
 
 The proof-of-work worker is outside the SRI chain (Workers cannot carry SRI); it receives no keys or secret content. For the highest-value keys, encrypt to the recipient's verified public key first and use Brix Share as transport.
