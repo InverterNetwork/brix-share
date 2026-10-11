@@ -174,6 +174,122 @@ This also checks the proof-of-work worker and static assets. Requires `jq` and b
 )
 ```
 
+### PowerShell commands
+
+The /verify OS selector uses these PowerShell equivalents for the same checks; set the exact fragment-free URL and your browser user agent first. The deeper checks use the same served release version.
+
+```powershell
+# Use the exact URL without its #fragment; replace <id> for a share link.
+$url = 'https://share.brix.money/'
+# $url = 'https://share.brix.money/s/<id>'
+# Copy your browser's user agent here (this is an example):
+$ua = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+(Invoke-WebRequest $url -UserAgent $ua -ErrorAction Stop).Content | Select-String 'brix-share-version'
+```
+
+```powershell
+# Use the served version, after checking the latest release on GitHub.
+$version = 'vX.Y.Z'
+Invoke-WebRequest "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -OutFile manifest.json -ErrorAction Stop
+```
+
+```powershell
+# Use the same exact $url and $ua set above, without the #fragment.
+Invoke-WebRequest $url -UserAgent $ua -OutFile index.html -ErrorAction Stop
+Get-FileHash index.html -Algorithm SHA256
+# Must show no-store:
+(Invoke-WebRequest $url -UserAgent $ua -Method Head -ErrorAction Stop).Headers['Cache-Control']
+```
+
+```powershell
+(Get-Content manifest.json -Raw -Encoding UTF8 | ConvertFrom-Json).files.'/index.html'
+```
+
+```powershell
+gh attestation verify manifest.json -R InverterNetwork/brix-share --signer-workflow InverterNetwork/brix-share/.github/workflows/release.yml --source-ref "refs/tags/$version"
+```
+
+```powershell
+# In a clone; paste the full release commit from GitHub.
+$commit = 'FULL_RELEASE_COMMIT_SHA'
+git fetch origin main
+git branch -r --contains $commit
+# The output must include origin/main.
+```
+
+```powershell
+# Use the same exact $url, without the #fragment.
+$har = Get-Content browser.har -Raw -Encoding UTF8 | ConvertFrom-Json
+$entries = @($har.log.entries | Where-Object { $_.request.url -ceq $url })
+if ($entries.Count -ne 1 -or $null -eq $entries[0].response.content.text) { throw 'Need exactly one document response with content' }
+$content = $entries[0].response.content
+if ($content.encoding -eq 'base64') {
+  $bytes = [Convert]::FromBase64String($content.text)
+} elseif (!$content.encoding -or $content.encoding -eq 'text') {
+  $bytes = [Text.Encoding]::UTF8.GetBytes($content.text)
+} else { throw 'Unsupported HAR encoding' }
+[IO.File]::WriteAllBytes((Join-Path $PWD 'browser-index.html'), $bytes)
+Get-FileHash browser-index.html -Algorithm SHA256
+```
+
+```powershell
+# A local scope keeps options and failures inside this check.
+& {
+  $ErrorActionPreference = 'Stop'
+  $base = 'https://share.brix.money'
+  $ua = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+  $manifest = Get-Content manifest.json -Raw -Encoding UTF8 | ConvertFrom-Json
+  $files = @($manifest.files.PSObject.Properties)
+  if ($files.Count -eq 0) { throw 'Manifest has no files' }
+  $temp = [IO.Path]::GetTempFileName()
+  try {
+    foreach ($file in $files) {
+      if (!$file.Name.StartsWith('/') -or $file.Value -notmatch '^[0-9a-f]{64} (Workers cannot carry SRI); it receives no keys or secret content. For the highest-value keys, encrypt to the recipient's verified public key first and use Brix Share as transport.
+
+The site's [/verify page](https://share.brix.money/verify) repeats these steps, but it could be tampered with too. This README on GitHub is the canonical copy; a “verified” badge from the page or backend would prove nothing against a changed frontend.
+
+## Repository layout
+
+pnpm workspace, Node 22 (`.nvmrc`):
+
+| Path | What |
+|---|---|
+| `shared/` | Protocol constants, strict base64url, AAD builders, Zod schemas, request validation, manage-token hash, proof-of-work rules, known-answer vectors |
+| `api/` | The single API Lambda: challenge, create, finalize, consume, status, delete; DynamoDB repository; S3 file store |
+| `sweeper/` | 5-minute cleanup Lambda and the proof-of-work governor |
+| `web/` | Vite + Preact + Tailwind app; all cryptography (`web/src/crypto`); Playwright suite and local test server (`web/e2e`) |
+| `infra/` | CDK app: zone, edge (WAF, certificate) and main stacks; stage config format in `infra/stages.example.json` |
+| `scripts/` | Release manifests, deploy scripts, live verification, log scrub, monitor |
+| `design/` | Brand tokens and logos (reference) |
+| `assets/` | README artwork |
+| `docs/` | Design spec, decisions, runbook |
+
+## Working on it
+
+Setup, checks, dependency rules and workflow: [CONTRIBUTING.md](CONTRIBUTING.md). The local app and API test server are in `web/e2e/`; the Playwright suite runs in Docker.
+
+## Deploying
+
+Deploys are manual, by a maintainer with admin access. Nothing deploys from CI.
+See [the deployment guide](docs/DEPLOYING.md) and [operations runbook](docs/RUNBOOK.md).
+
+## License
+
+Copyright (C) 2026 Brix. The source code is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only): you may use, change and run it, including as a hosted service, as long as you publish your changes under the same licence.
+
+Not covered by that licence:
+- **The Brix brand.** The Brix name, the Brix and Brix Share logos (`assets/`, `design/brand/assets/`, the mark in `web/src/ui/shell.tsx`, `web/public/favicon.svg`) and the Brix visual identity belong to Brix and are not licensed for reuse. All rights reserved. A fork must remove them and use its own name and branding before it is deployed for others.
+- **Fonts** in `web/src/assets/fonts` are third-party works under the SIL Open Font License; see `LICENSE.md` there.
+) { throw 'Invalid manifest entry' }
+      Invoke-WebRequest "$base$($file.Name)" -UserAgent $ua -OutFile $temp
+      $actual = (Get-FileHash $temp -Algorithm SHA256).Hash
+      if ($actual -ne $file.Value) { throw "MISMATCH $($file.Name)" }
+      "OK $($file.Name)"
+    }
+  } finally { Remove-Item $temp }
+}
+```
+
 The proof-of-work worker is outside the SRI chain (Workers cannot carry SRI); it receives no keys or secret content. For the highest-value keys, encrypt to the recipient's verified public key first and use Brix Share as transport.
 
 The site's [/verify page](https://share.brix.money/verify) repeats these steps, but it could be tampered with too. This README on GitHub is the canonical copy; a “verified” badge from the page or backend would prove nothing against a changed frontend.

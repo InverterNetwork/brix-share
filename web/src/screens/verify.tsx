@@ -1,156 +1,303 @@
 import type { ComponentChildren } from 'preact';
-import { BUILD_INFO, REPOSITORY } from '../build-info.ts';
-import { Lede, PageTitle, Panel } from '../ui/kit.tsx';
-import {
-  ALL_FILES_COMMAND,
-  ATTEST_COMMAND,
-  COMMIT_COMMAND,
-  HAR_COMMAND,
-  HASH_COMMAND,
-  MANIFEST_COMMAND,
-  VERSION_COMMAND,
-  WINDOWS_COMMAND,
-} from '../verify-commands.ts';
+import { useState } from 'preact/hooks';
+import { ArrowRight, Code2, FileCheck2, GitBranch, MonitorCheck } from 'lucide-preact';
+import { REPOSITORY } from '../build-info.ts';
+import { CopyButton, PageTitle, Panel, Segmented } from '../ui/kit.tsx';
+import * as commands from '../verify-commands.ts';
 
+type OS = 'unix' | 'windows';
 const P = ({ children }: { children: ComponentChildren }) => (
-  <p class="mb-3 text-[15px] leading-relaxed text-fg-3">{children}</p>
+  <p class="text-[15px] leading-relaxed text-fg-3">{children}</p>
 );
-const H = ({ children }: { children: ComponentChildren }) => (
-  <h2 class="mb-3 text-lg font-semibold text-white">{children}</h2>
+const H = ({ children, id }: { children: ComponentChildren; id: string }) => (
+  <h2 id={id} class="mb-4 text-lg font-semibold text-white">
+    {children}
+  </h2>
 );
-const Code = ({ children }: { children: string }) => (
-  <pre class="mb-4 max-w-full overflow-x-auto rounded border border-line-soft p-3 font-mono text-xs text-fg-3">
-    <code>{children}</code>
-  </pre>
+const Link = ({ href, children }: { href: string; children: ComponentChildren }) => (
+  <a href={href} class="text-white underline">
+    {children}
+  </a>
 );
+
+function Code({ text, os }: { text: string; os: OS }) {
+  return (
+    <div class="mt-4 min-w-0 overflow-hidden rounded-sm border border-line-soft bg-field">
+      <div class="flex items-center justify-between gap-3 border-b border-line-soft px-3 py-1.5">
+        <span class="text-xs text-fg-3">{os === 'windows' ? 'PowerShell' : 'Terminal'}</span>
+        <CopyButton key={text} text={text} variant="ghost" />
+      </div>
+      <pre
+        tabIndex={0}
+        aria-label="Command to copy"
+        class="max-w-full overflow-x-auto p-3 font-mono text-xs leading-relaxed text-fg-2"
+      >
+        <code>{text}</code>
+      </pre>
+    </div>
+  );
+}
+
+function Step({
+  number,
+  title,
+  id,
+  children,
+  text,
+  os,
+}: {
+  number: number;
+  title: string;
+  id: string;
+  children: ComponentChildren;
+  text: string;
+  os: OS;
+}) {
+  return (
+    <li id={id} class="min-w-0">
+      <Panel as="div">
+        <h3 class="mb-2 flex items-center gap-3 text-base font-semibold text-white">
+          <span
+            class="flex size-7 shrink-0 items-center justify-center rounded-full border border-orange/30 bg-orange/10 text-sm text-orange"
+            aria-hidden="true"
+          >
+            {number}
+          </span>
+          <span>
+            <span class="sr-only">Step {number}: </span>
+            {title}
+          </span>
+        </h3>
+        <P>{children}</P>
+        <Code text={text} os={os} />
+      </Panel>
+    </li>
+  );
+}
+
+function Deeper({
+  title,
+  id,
+  children,
+}: {
+  title: string;
+  id: string;
+  children: ComponentChildren;
+}) {
+  return (
+    <details id={id} class="min-w-0 rounded-lg border border-line-soft bg-raised p-5 sm:p-6">
+      <summary class="cursor-pointer text-[15px] font-semibold text-white">
+        <span>{title}</span>
+      </summary>
+      <div class="mt-4 min-w-0 space-y-3">{children}</div>
+    </details>
+  );
+}
 
 export function VerifyScreen() {
-  const releaseUrl =
-    BUILD_INFO.version === 'dev'
-      ? `${REPOSITORY}/releases`
-      : `${REPOSITORY}/releases/tag/${BUILD_INFO.version}`;
+  const [os, setOS] = useState<OS>('unix');
+  const windows = os === 'windows';
+  const pick = (unix: string, win: string) => (windows ? win : unix);
+  const chain = [
+    { icon: Code2, title: 'Public source', text: 'Code anyone can inspect' },
+    { icon: GitBranch, title: 'Reproducible build', text: 'Built twice on GitHub' },
+    { icon: FileCheck2, title: 'Release manifest', text: 'Hashes and signed provenance' },
+    { icon: MonitorCheck, title: 'Your comparison', text: 'Check what your browser got' },
+  ];
   return (
     <div class="min-w-0 max-w-[760px]">
       <PageTitle>Verify this site.</PageTitle>
-      <Lede>
-        Encryption happens in your browser. The code your browser loads decides whether your secret
-        stays private.
-      </Lede>
-      <div class="flex min-w-0 flex-col gap-4">
-        <Panel>
-          <H>How we make it checkable</H>
+      <p class="mt-3 max-w-[640px] text-[15px] leading-relaxed text-fg-3">
+        Your browser encrypts your secrets, so changed website code could read them. These checks
+        help you spot code that differs from our public release, including changes to our own
+        hosting.
+      </p>
+      <p class="mt-3 mb-8 text-sm text-fg-3">
+        Most people never need to do this; it exists so anyone can check us.
+      </p>
+
+      <section aria-labelledby="verify-chain" class="mb-8">
+        <H id="verify-chain">How it fits together</H>
+        <ol
+          class="grid grid-cols-1 gap-3 sm:grid-cols-4"
+          aria-label="From public source to your browser"
+        >
+          {chain.map(({ icon: Icon, title, text }, i) => (
+            <li
+              key={title}
+              class="relative min-w-0 rounded-sm border border-line-soft bg-raised p-4"
+            >
+              <Icon aria-hidden="true" class="mb-3 size-5 text-orange" />
+              <p class="mb-1 text-sm font-semibold text-white">{title}</p>
+              <p class="text-xs leading-relaxed text-fg-3">{text}</p>
+              {i < chain.length - 1 && (
+                <ArrowRight
+                  aria-hidden="true"
+                  class="absolute -bottom-3 left-1/2 z-10 size-4 rotate-90 bg-bg text-muted sm:top-1/2 sm:-right-3 sm:bottom-auto sm:left-auto sm:rotate-0"
+                />
+              )}
+            </li>
+          ))}
+        </ol>
+        <p class="mt-4 text-sm leading-relaxed text-fg-3">
+          Anyone can rebuild the tag and compare it with the manifest: reproducibility is the
+          underlying root of trust. The release’s index.html pins the entry script and stylesheet
+          with integrity hashes the browser enforces; all code that handles secrets is bundled into
+          that script.
+        </p>
+      </section>
+
+      <section aria-labelledby="verify-quick" class="mb-8">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 id="verify-quick" class="text-lg font-semibold text-white">
+            Quick check
+          </h2>
+          <Segmented<OS>
+            label="Command operating system"
+            value={os}
+            onChange={setOS}
+            options={[
+              { value: 'unix', label: 'macOS / Linux' },
+              { value: 'windows', label: 'Windows' },
+            ]}
+          />
+        </div>
+        <p class="mb-4 text-sm leading-relaxed text-fg-3">
+          Use / to create a secret, /s/&lt;id&gt; to reveal one, or /m/&lt;id&gt; to manage it.
+          Remove the #fragment first: it holds the key or manage token and is never sent to the
+          server. A version label is not proof.
+        </p>
+        <ol class="space-y-3">
+          <Step
+            number={1}
+            title="Read the version"
+            id="verify-version"
+            os={os}
+            text={pick(commands.VERSION_COMMAND, commands.WINDOWS_VERSION_COMMAND)}
+          >
+            Read the build label from the exact URL you are about to use, without its #fragment.
+          </Step>
+          <Step
+            number={2}
+            title="Check the release"
+            id="verify-release"
+            os={os}
+            text={pick(commands.MANIFEST_COMMAND, commands.WINDOWS_MANIFEST_COMMAND)}
+          >
+            Compare the served version with{' '}
+            <Link href={`${REPOSITORY}/releases/latest`}>the latest release on GitHub</Link>, then
+            download that served release’s manifest.
+          </Step>
+          <Step
+            number={3}
+            title="Hash that exact URL"
+            id="verify-hash"
+            os={os}
+            text={pick(commands.HASH_COMMAND, commands.WINDOWS_HASH_COMMAND)}
+          >
+            Hash the same fragment-free URL with your browser’s user agent and check that its
+            headers show Cache-Control: no-store.
+          </Step>
+          <Step
+            number={4}
+            title="Compare the hashes"
+            id="verify-compare"
+            os={os}
+            text={pick(commands.COMPARE_COMMAND, commands.WINDOWS_COMPARE_COMMAND)}
+          >
+            Compare your result with the manifest’s /index.html entry from GitHub; every page path
+            must return byte-identical index.html.
+          </Step>
+        </ol>
+        <div class="mt-4 space-y-3">
           <P>
-            The source is public. Every release is built twice and publishes SHA-256 hashes of every
-            served file on GitHub, with a signed manifest attestation. Anyone can rebuild the tag
-            and compare it with the manifest: reproducibility is the underlying root of trust.
+            A new release may take a short while to deploy; an older release that stays live is a
+            warning sign, even if its hashes match. The hash is over the decompressed response body,
+            so compressed delivery still matches.
           </P>
           <P>
-            The release’s index.html pins the entry script and stylesheet with integrity hashes the
-            browser enforces. The application bundles all code that handles secrets into that
-            script. Every page path must return byte-identical index.html: check the exact URL you
-            are about to use. Use GitHub and your own tools; a badge on this page would prove
-            nothing.
+            Before trusting a release, also confirm its full commit is on main under Go deeper.
+            Checking /index.html alone cannot detect a different document served on a share link.
           </P>
-        </Panel>
-        <Panel>
-          <H>Check it yourself</H>
-          <P>
-            1. Read the version from the exact URL you are about to use: / for creating a secret,
-            /s/&lt;id&gt; for revealing one, or /m/&lt;id&gt; for managing it. Remove the #fragment
-            first; it contains the key or manage token and is never sent to the server. The version
-            is a label, not proof.
-          </P>
-          <Code>{VERSION_COMMAND}</Code>
-          <P>
-            2. Confirm that the served version is{' '}
-            <a href={`${REPOSITORY}/releases/latest`} class="text-white underline">
-              the latest release on GitHub
-            </a>
-            . Right after a new release, the site can lag for a short while until it is deployed. An
-            older legitimate release still passes its hash checks; an older version that stays live
-            is a warning sign. Open{' '}
-            <a href={releaseUrl} class="text-white underline">
-              the release
-            </a>{' '}
-            and find /index.html in its hash table, or download manifest.json and read that entry.
-            Never take the expected hash from this site.
-          </P>
-          <Code>{MANIFEST_COMMAND}</Code>
-          <P>
-            3. Confirm that the release’s full commit SHA is on main. Open its GitHub commit page
-            and check the listed branches, or use the commands below in a clone. A tag name or an
-            attestation alone does not establish that the code went through review.
-          </P>
-          <Code>{COMMIT_COMMAND}</Code>
-          <P>
-            Optionally verify the manifest with the GitHub CLI. Check its reported commit against
-            the release commit you just checked. The signer and source-ref restrictions check the
-            workflow and tag name; they do not prove that the commit was reviewed or belongs to
-            main.
-          </P>
-          <Code>{ATTEST_COMMAND}</Code>
-          <P>
-            4. Hash the response from that same exact URL on macOS or Linux and compare it with the
-            manifest’s /index.html entry. Checking /index.html alone cannot detect a different
-            document served on a share link. Every path must return the same bytes. --compressed
-            hashes the decompressed body, matching the manifest. Use your browser’s user agent;
-            response headers must show Cache-Control: no-store.
-          </P>
-          <Code>{HASH_COMMAND}</Code>
-          <P>On Windows, download the response with PowerShell and hash the file:</P>
-          <Code>{WINDOWS_COMMAND}</Code>
-          <H>The copy your browser received</H>
-          <P>
-            A server could send curl the release and your browser a different document. Checking
-            your browser’s original document response is stronger. “Save page as”, copying the DOM
-            or copying view-source text can change bytes; do not hash those as if they were the
-            response.
-          </P>
-          <P>
-            Open DevTools’ Network panel, load the exact URL without its #fragment, and export a HAR
-            with response content as browser.har. Loading /s/&lt;id&gt; does not consume a
-            retrieval; only clicking Reveal does. Select the document response, not an API response.
-            Extract it without adding a newline and compare with the manifest’s /index.html hash.
-            The commands require exactly one matching response with content. Browser-menu exports
-            have not been checked in every browser.
-          </P>
-          <Code>{HAR_COMMAND}</Code>
-          <P>
-            Brix Share registers no service workers. Check your browser’s developer tools for
-            service workers registered for share.brix.money; there must be none. If one is present,
-            unregister it, reload and repeat the checks.
-          </P>
-          <H>Optional: check every file</H>
-          <P>This also covers the proof-of-work worker and static assets.</P>
-          <Code>{ALL_FILES_COMMAND}</Code>
           <P>
             If any hash differs, an older release stays live or verification fails, do not use the
-            site. Report it to{' '}
-            <a href="mailto:security@brix.money" class="text-white underline">
-              security@brix.money
-            </a>
-            .
+            site; report it to <Link href="mailto:security@brix.money">security@brix.money</Link>.
           </P>
-        </Panel>
-        <Panel>
-          <H>Where trust starts, and what remains</H>
+        </div>
+      </section>
+
+      <section aria-labelledby="verify-deeper" class="mb-8">
+        <H id="verify-deeper">Go deeper</H>
+        <div class="space-y-3">
+          <Deeper title="Verify the signed manifest" id="verify-attestation">
+            <P>
+              Optionally use the GitHub CLI to verify provenance, restricting the signer and tag
+              name. Check its reported commit against the release commit; these restrictions do not
+              prove that it was reviewed or is on main. Releases predating attestations have none.
+            </P>
+            <Code os={os} text={pick(commands.ATTEST_COMMAND, commands.WINDOWS_ATTEST_COMMAND)} />
+          </Deeper>
+          <Deeper title="Confirm the commit is on main" id="verify-commit">
+            <P>
+              Confirm the release’s full SHA is on main using the branches on its GitHub commit page
+              or these commands in a clone. A tag or an attestation alone does not establish that
+              the code went through review.
+            </P>
+            <Code os={os} text={pick(commands.COMMIT_COMMAND, commands.WINDOWS_COMMIT_COMMAND)} />
+          </Deeper>
+          <Deeper title="Check the copy your browser received" id="verify-browser">
+            <P>
+              A site could send curl the release and your browser a different document. In DevTools’
+              Network panel, load the exact URL without its #fragment and export the original
+              document response as browser.har with content; loading /s/&lt;id&gt; counts nothing,
+              only clicking Reveal does.
+            </P>
+            <P>
+              Extract exactly one matching response without adding a newline and compare it with the
+              manifest’s /index.html hash. “Save page as”, DOM and view-source copies may change
+              bytes. Browser-menu exports have not been checked in every browser.
+            </P>
+            <Code os={os} text={pick(commands.HAR_COMMAND, commands.WINDOWS_HAR_COMMAND)} />
+          </Deeper>
+          <Deeper title="Check for service workers" id="verify-workers">
+            <P>
+              Brix Share registers no service workers. Check your browser’s developer tools for
+              service workers registered for share.brix.money; there must be none. If one is
+              present, unregister it, reload and repeat the checks.
+            </P>
+          </Deeper>
+          <Deeper title="Check every served file" id="verify-files">
+            <P>
+              This also covers the proof-of-work worker and static assets. Workers cannot carry SRI,
+              so this worker is outside the integrity chain; it receives no keys or secret content.
+            </P>
+            <Code
+              os={os}
+              text={pick(commands.ALL_FILES_COMMAND, commands.WINDOWS_ALL_FILES_COMMAND)}
+            />
+          </Deeper>
+        </div>
+      </section>
+
+      <Panel class="border-orange/25">
+        <H id="verify-trust">Keep trust outside this page</H>
+        <div class="space-y-3">
           <P>
-            This page comes from the same site and could be tampered with too. If in doubt, use the
-            canonical{' '}
-            <a href={`${REPOSITORY}#verify-this-site`} class="text-white underline">
-              README instructions on GitHub
-            </a>
-            . Trust still depends on GitHub, the reviewed source, your tools and your browser. An
-            attestation establishes provenance, not that the code is safe, and checking one response
-            does not verify future loads or the server’s access rules.
+            This page could itself be tampered with; if in doubt, follow the canonical{' '}
+            <Link href={`${REPOSITORY}#verify-this-site`}>README on GitHub</Link>. A “verified”
+            badge from this page or our backend would prove nothing against changed frontend code.
           </P>
           <P>
-            The proof-of-work worker is outside the integrity chain because Workers cannot carry
-            SRI. It receives no secret content or keys. For the highest-value keys, encrypt to the
-            recipient’s verified public key first and use Brix Share as transport.
+            Attestation proves provenance, not safety. Trust still depends on GitHub, reviewed
+            source, your tools and your browser; checking one response does not verify future loads
+            or the server’s access rules.
           </P>
-        </Panel>
-      </div>
+          <P>
+            For the highest-value keys, encrypt to the recipient’s verified public key first and use
+            Brix Share as transport.
+          </P>
+        </div>
+      </Panel>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
-import { noHorizontalOverflow, watch } from './helpers.ts';
+import { noHorizontalOverflow, shot, watch } from './helpers.ts';
 
 test('footer identity and verify page: navigation, copyable commands, CSP and phone layout', async ({
   page,
@@ -24,19 +24,111 @@ test('footer identity and verify page: navigation, copyable commands, CSP and ph
   await expect(page).toHaveURL(/\/verify$/);
   await expect(page).toHaveTitle('Verify this site · Brix Share');
   await expect(page.getByRole('heading', { name: 'Verify this site.' })).toBeVisible();
-  await expect(page.locator('pre').filter({ hasText: 'gh attestation verify' })).toBeVisible();
+  await expect(page.locator('#verify-attestation')).not.toHaveAttribute('open');
+  await expect(page.locator('#verify-attestation pre')).not.toBeVisible();
   await expect(page.getByRole('link', { name: 'the latest release on GitHub' })).toHaveAttribute(
     'href',
     'https://github.com/InverterNetwork/brix-share/releases/latest',
   );
-  await expect(page.locator('pre').filter({ hasText: 'git branch -r --contains' })).toBeVisible();
-  await expect(page.locator('main')).toContainText('Every path must return the same bytes');
+  await expect(page.locator('#verify-commit')).not.toHaveAttribute('open');
+  await expect(page.locator('main')).toContainText(
+    'every page path must return byte-identical index.html',
+  );
   await expect(page.locator('main')).not.toContainText('Playwright');
   await noHorizontalOverflow(page);
   await w.assertClean(baseURL!);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Verify this site.' })).toBeVisible();
   await w.assertClean(baseURL!);
+});
+
+test('OS selector changes every command; details, keyboard, copying, CSP and screenshots', async ({
+  page,
+  browserName,
+  context,
+  baseURL,
+}, info) => {
+  if (browserName === 'chromium')
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  else
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: {
+          writeText: (text: string) => {
+            (window as unknown as { __clip: string }).__clip = text;
+            return Promise.resolve();
+          },
+        },
+      });
+    });
+  const w = await watch(page);
+  await page.goto('/verify');
+  const selector = page.getByRole('radiogroup', { name: 'Command operating system' });
+  await expect(selector.getByRole('radio', { name: 'macOS / Linux' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  for (const detail of ['attestation', 'commit', 'browser', 'workers', 'files']) {
+    await expect(page.locator(`#verify-${detail}`)).not.toHaveAttribute('open');
+    await page.locator(`#verify-${detail} summary`).click();
+    await expect(page.locator(`#verify-${detail}`)).toHaveAttribute('open', '');
+  }
+  const unix = await page.locator('pre code').allTextContents();
+  expect(unix).toHaveLength(8);
+  await selector.getByRole('radio', { name: 'macOS / Linux' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(selector.getByRole('radio', { name: 'Windows' })).toBeFocused();
+  await expect(selector.getByRole('radio', { name: 'Windows' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  const windows = await page.locator('pre code').allTextContents();
+  for (let i = 0; i < unix.length; i++) expect(windows[i]).not.toBe(unix[i]);
+  await expect(page.locator('#verify-version pre')).toContainText('Invoke-WebRequest');
+  await expect(page.locator('#verify-hash pre')).toContainText('Get-FileHash');
+  await expect(page.locator('#verify-browser pre')).toContainText('WriteAllBytes');
+  await page.locator('#verify-hash').getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(
+    page.locator('#verify-hash').getByRole('button', { name: 'Copied', exact: true }),
+  ).toBeVisible();
+  const clip =
+    browserName === 'chromium'
+      ? await page.evaluate(() => navigator.clipboard.readText())
+      : await page.evaluate(() => (window as unknown as { __clip: string }).__clip);
+  expect(clip).toBe(windows[2]);
+  await page.locator('#verify-browser').getByRole('button', { name: 'Copy', exact: true }).click();
+  const deeperClip =
+    browserName === 'chromium'
+      ? await page.evaluate(() => navigator.clipboard.readText())
+      : await page.evaluate(() => (window as unknown as { __clip: string }).__clip);
+  expect(deeperClip).toBe(windows[6]);
+  await noHorizontalOverflow(page);
+  await w.assertClean(baseURL!);
+  await selector.getByRole('radio', { name: 'Windows' }).focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(selector.getByRole('radio', { name: 'macOS / Linux' })).toBeFocused();
+  expect(await page.locator('pre code').allTextContents()).toEqual(unix);
+  for (const detail of ['commit', 'browser', 'workers', 'files'])
+    await page.locator(`#verify-${detail} summary`).click();
+  await noHorizontalOverflow(page);
+  await w.assertClean(baseURL!);
+  // Capture only after CSP assertions: screenshots can inject a style in WebKit.
+  await shot(page, info, 'verify-unix');
+  await selector.getByRole('radio', { name: 'Windows' }).click();
+  await noHorizontalOverflow(page);
+  await shot(page, info, 'verify-windows');
+  await page.setViewportSize({ width: 320, height: 740 });
+  await noHorizontalOverflow(page);
+  await page.reload();
+  await expect(selector.getByRole('radio', { name: 'macOS / Linux' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(page.locator('details[open]')).toHaveCount(0);
+  expect(
+    await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length })),
+  ).toEqual({ local: 0, session: 0 });
+  await noHorizontalOverflow(page);
 });
 
 for (const documentPath of ['/', '/s/AAAAAAAAAAAAAAAAAAAAAA']) {
