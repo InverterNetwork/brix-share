@@ -1,0 +1,10 @@
+pnpm-lock.yaml
+design/
+dist/
+cdk.out/
+coverage/
+playwright-report/
+test-results/
+shared/vectors/
+*.md
+web/e2e/.kat/

@@ -1,0 +1,103 @@
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { afterEach, describe, expect, it } from 'vitest';
+import { securityHeaders } from '../../shared/src/headers.ts';
+import { cacheControl, contentType } from '../../web/delivery.ts';
+import { checkDelivery } from '../live-checks.ts';
+import { sha256Hex } from '../manifest.ts';
+
+const ORIGIN = 'https://files-bucket.s3.eu-central-1.amazonaws.com';
+const SITE: Record<string, string> = {
+  '/index.html': '<!doctype html><script type="module" src="/assets/index-a.js"></script>',
+  '/assets/index-a.js': 'console.log(1)',
+  '/assets/worker-a.js': 'self.onmessage=()=>{}',
+  '/robots.txt': 'User-agent: *\nDisallow: /\n',
+};
+const MANIFEST = Object.fromEntries(Object.entries(SITE).map(([p, c]) => [p, sha256Hex(c)]));
+
+interface Tamper {
+  file?: [string, string];
+  spaIndex?: string;
+  dropHeader?: string;
+  cache?: string;
+}
+
+let server: Server | undefined;
+afterEach(() => server?.close());
+
+async function site(t: Tamper = {}): Promise<string> {
+  const files = { ...SITE, ...(t.file ? { [t.file[0]]: t.file[1] } : {}) };
+  server = createServer((req, res) => {
+    const path = new URL(req.url ?? '/', 'http://x').pathname;
+    const headers = Object.fromEntries(
+      Object.entries(securityHeaders(ORIGIN)).filter(([k]) => k !== t.dropHeader),
+    );
+    if (path === '/api/health')
+      return void res.writeHead(200, { ...headers, 'cache-control': 'no-store' }).end();
+    const isSpa = !path.slice(path.lastIndexOf('/') + 1).includes('.');
+    const file = isSpa ? '/index.html' : path;
+    const body = isSpa && path.startsWith('/s/') && t.spaIndex ? t.spaIndex : files[file];
+    if (body === undefined) return void res.writeHead(404).end();
+    res.writeHead(200, {
+      ...headers,
+      'content-type': contentType(file),
+      'cache-control': t.cache && file === '/index.html' ? t.cache : cacheControl(file),
+    });
+    res.end(body);
+  });
+  await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+}
+
+describe('checkDelivery', () => {
+  it('passes when everything matches the release', async () => {
+    expect(await checkDelivery(await site(), MANIFEST, ORIGIN)).toEqual([]);
+  });
+
+  it('catches a tampered asset, including one only referenced from JS', async () => {
+    const f = await checkDelivery(
+      await site({ file: ['/assets/worker-a.js', 'evil()'] }),
+      MANIFEST,
+      ORIGIN,
+    );
+    expect(f).toContain('/assets/worker-a.js: content differs from the release manifest');
+  });
+
+  it('catches a different index served only on share paths (cloaked rewrite)', async () => {
+    const f = await checkDelivery(
+      await site({ spaIndex: '<script src="/evil.js"></script>' }),
+      MANIFEST,
+      ORIGIN,
+    );
+    expect(f).toContain('index.html differs between /, /index.html and SPA paths');
+  });
+
+  it('catches weakened headers and caching', async () => {
+    expect(
+      (
+        await checkDelivery(
+          await site({ dropHeader: 'cross-origin-opener-policy' }),
+          MANIFEST,
+          ORIGIN,
+        )
+      ).some((x) => x.includes('cross-origin-opener-policy')),
+    ).toBe(true);
+    expect(
+      (await checkDelivery(await site({ cache: 'public, max-age=3600' }), MANIFEST, ORIGIN)).some(
+        (x) => x.includes('cache-control'),
+      ),
+    ).toBe(true);
+    expect(
+      await checkDelivery(await site({ dropHeader: 'content-security-policy' }), MANIFEST, ORIGIN),
+    ).toEqual([`/: CSP allows no files origin instead of ${ORIGIN}`]);
+  });
+
+  it('catches a CSP that allows a different files origin than the stage config', async () => {
+    const f = await checkDelivery(
+      await site(),
+      MANIFEST,
+      'https://brix-share-prod-files-1.s3.eu-central-1.amazonaws.com',
+    );
+    expect(f[0]).toMatch(/^\/: CSP allows https:\/\/files-bucket/);
+  });
+});

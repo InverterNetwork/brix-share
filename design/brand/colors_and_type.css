@@ -1,0 +1,97 @@
+/* =========================================================================
+   BRIX DESIGN SYSTEM — colors + typography (Brix Share copy)
+   Source: Brix Design System (internal), colors_and_type.css
+   Changes vs source: Google Fonts @import removed; type matches the Brix
+   consumer app (Archivo text, Space Grotesk headings), DM Mono for code-like
+   text. Everything else verbatim.
+   ========================================================================= */
+
+/* Fonts: self-hosted in web/src/assets/fonts (Archivo, Space Grotesk, DM Mono; OFL, see LICENSE.md there). */
+
+:root {
+  /* ====== BRAND PRIMITIVES ====== */
+  --brix-orange:        #DF7032;
+  --brix-orange-peach:  #FFCAAC;
+  --brix-nightly:       #0B0B0B;
+  --brix-black:         #000000;
+  --brix-white:         #FFFFFF;
+  --brix-platinum:      #E6E6E6;
+  --brix-muted:         #62656B;
+  --brix-slate-400:     #9CA3AF;
+  --brix-dark:          #141414;
+  --brix-line:          #333333;
+  --brix-line-soft:     rgba(255,255,255,0.10);
+  --brix-line-mid:      rgba(255,255,255,0.125);
+  --brix-line-strong:   rgba(255,255,255,0.50);
+
+  /* ====== SEMANTIC: DARK (default) ====== */
+  --bg:          var(--brix-nightly);
+  --bg-raised:   var(--brix-dark);
+  --bg-sunken:   #000000;
+  --fg:          var(--brix-white);
+  --fg-2:        var(--brix-platinum);
+  --fg-3:        var(--brix-slate-400);
+  --fg-muted:    var(--brix-muted);
+  --border:      var(--brix-line);
+  --border-soft: var(--brix-line-soft);
+  --accent:      var(--brix-orange);
+  --accent-ink:  var(--brix-white);
+
+  /* ====== STATUS ====== */
+  --status-error:   #E53935;
+  --status-error-bg:#1A0A0A;
+  --status-success: #67DAAE;
+  --status-info:    #135BEC;
+
+  /* ====== GRADIENTS / SIGNATURE FX ====== */
+  --brix-gradient:     linear-gradient(135deg, #FFFFFF 0%, #DF7032 100%);
+  --brix-glow:         radial-gradient(60% 60% at 50% 50%, rgba(223,112,50,0.45) 0%, rgba(223,112,50,0) 70%);
+  --brix-glow-soft:    radial-gradient(60% 60% at 50% 50%, rgba(255,202,172,0.35) 0%, rgba(255,202,172,0) 70%);
+
+  /* ====== TYPE FAMILIES (web app subset) ====== */
+  --font-title:   "Space Grotesk", system-ui, -apple-system, sans-serif;
+  --font-body:    "Archivo", system-ui, -apple-system, sans-serif;
+  --font-mono:    "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ====== TYPE SCALE ====== */
+  --t-h3:      28px;
+  --t-h4:      22px;
+  --t-body-lg: 20px;
+  --t-body:    16px;
+  --t-body-sm: 14px;
+  --t-caption: 12px;
+  --t-eyebrow: 14px;
+
+  /* ====== SPACING / RADII / ELEVATION ====== */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px; --space-5: 24px;
+  --space-6: 32px; --space-7: 48px; --space-8: 64px; --space-9: 80px; --space-10:100px;
+
+  --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px;
+  --radius-pill: 99px; --radius-card: 27px;
+
+  --shadow-sm:  0 1px 2px rgba(0,0,0,0.35);
+  --shadow-md:  0 8px 24px rgba(0,0,0,0.45);
+  --shadow-glow:0 0 48px rgba(223,112,50,0.35);
+  --ring-focus: 0 0 0 3px rgba(223,112,50,0.40);
+
+  /* ====== MOTION ====== */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.6, 0, 0.2, 1);
+  --dur-fast: 120ms; --dur: 200ms; --dur-slow: 400ms;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.brix-h3 { font-family: var(--font-title); font-weight: 400; font-size: var(--t-h3); line-height: 1.2; letter-spacing: -0.01em; }
+.brix-body-lg { font-family: var(--font-body); font-size: var(--t-body-lg); line-height: 1.6; color: var(--fg-3); }
+.brix-body { font-family: var(--font-body); font-size: var(--t-body); line-height: 1.6; color: var(--fg-2); }
+.brix-body-sm { font-family: var(--font-body); font-size: var(--t-body-sm); line-height: 1.5; color: var(--fg-3); }
+.brix-caption { font-family: var(--font-body); font-size: var(--t-caption); color: var(--fg-muted); line-height: 1.4; }
+.brix-eyebrow { font-family: var(--font-mono); font-weight: 500; font-size: var(--t-eyebrow); letter-spacing: 0.15em; text-transform: uppercase; color: var(--fg); }
+.brix-mono { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0; }
+::selection { background: var(--accent); color: var(--accent-ink); }

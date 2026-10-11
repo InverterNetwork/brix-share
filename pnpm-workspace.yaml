@@ -1,0 +1,13 @@
+packages:
+  - shared
+  - api
+  - sweeper
+  - web
+  - infra
+  - scripts
+
+saveExact: true
+minimumReleaseAge: 10080
+
+allowBuilds:
+  esbuild: true

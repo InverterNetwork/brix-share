@@ -1,0 +1,27 @@
+{
+  "name": "@brix-share/web",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && tsc -p test && tsc -p e2e",
+    "test": "vitest run",
+    "e2e": "scripts/e2e-docker.sh"
+  },
+  "dependencies": {
+    "@brix-share/shared": "workspace:*",
+    "lucide-preact": "1.50.0",
+    "preact": "10.29.8",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-dynamodb": "3.1145.0",
+    "@playwright/test": "1.63.0",
+    "@tailwindcss/vite": "4.3.3",
+    "esbuild": "0.28.2",
+    "tailwindcss": "4.3.3",
+    "vite": "8.3.2"
+  }
+}

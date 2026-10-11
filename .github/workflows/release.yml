@@ -1,0 +1,43 @@
+name: release
+
+# A release is a v* tag on main. Publishes the manifest of the reproducible build; deploys stay manual
+# (scripts/deploy-web.ts refuses to deploy a local build that differs from this manifest).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tag must be on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: manifest
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Web build of \`$GITHUB_SHA\`, reproduced twice in CI."
+            echo
+            echo "| SHA-256 | File |"
+            echo "|---|---|"
+            jq -r '.files | to_entries[] | "| `\(.value)` | `\(.key)` |"' manifest.json
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" manifest.json --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag

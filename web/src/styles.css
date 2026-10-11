@@ -1,0 +1,150 @@
+@import 'tailwindcss';
+
+/* Brix Design System tokens (design/brand/colors_and_type.css) as the Tailwind theme. Dark only. */
+
+/* Same type as the Brix consumer app: Archivo for text, Space Grotesk for headings (both OFL, latin and
+   latin-ext subsets from Google Fonts, self-hosted for the CSP). DM Mono stays for links, passphrases and
+   timestamps, where l, 1 and I must stay distinguishable. Licences: assets/fonts/LICENSE.md. */
+@font-face {
+  font-family: 'Archivo';
+  src: url('./assets/fonts/Archivo-latin-ext.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Archivo';
+  src: url('./assets/fonts/Archivo-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('./assets/fonts/SpaceGrotesk-latin-ext.woff2') format('woff2');
+  font-weight: 300 700;
+  font-display: swap;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('./assets/fonts/SpaceGrotesk-latin.woff2') format('woff2');
+  font-weight: 300 700;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'DM Mono';
+  src: url('./assets/fonts/DMMono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'DM Mono';
+  src: url('./assets/fonts/DMMono-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+
+@theme {
+  --color-*: initial;
+  --color-orange: #df7032;
+  --color-orange-hover: #c85c22;
+  --color-peach: #ffcaac;
+  --color-bg: #0b0b0b;
+  --color-raised: #141414;
+  --color-sunken: #000000;
+  --color-field: #101010;
+  --color-white: #ffffff;
+  --color-fg-2: #e6e6e6;
+  --color-fg-3: #9ca3af;
+  --color-muted: #62656b;
+  --color-line: #333333;
+  --color-line-soft: rgb(255 255 255 / 0.1);
+  --color-line-mid: rgb(255 255 255 / 0.125);
+  --color-line-strong: rgb(255 255 255 / 0.5);
+  --color-error: #e53935;
+  --color-error-bg: #1a0a0a;
+  --color-error-fg: #f0a4a1;
+  --color-success: #67daae;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-title: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 99px;
+
+  --shadow-glow: 0 0 48px rgb(223 112 50 / 0.35);
+  --shadow-ring: 0 0 0 3px rgb(223 112 50 / 0.4);
+
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --default-transition-duration: 200ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@layer base {
+  html {
+    background: var(--color-bg);
+    color: var(--color-white);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    min-height: 100dvh;
+    background-image: radial-gradient(
+      70% 40% at 50% -10%,
+      rgb(223 112 50 / 0.14) 0%,
+      rgb(223 112 50 / 0) 70%
+    );
+    background-repeat: no-repeat;
+  }
+  /* iOS Safari sizes date inputs by their native content and ignores width: 100%, so they overflow narrow
+     panels. Only touch-callout browsers (iOS) get the reset; desktop keeps its picker icon. */
+  @supports (-webkit-touch-callout: none) {
+    input[type='datetime-local'] {
+      -webkit-appearance: none;
+      appearance: none;
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+    }
+    input[type='datetime-local']::-webkit-date-and-time-value {
+      text-align: left;
+    }
+  }
+  ::selection {
+    background: var(--color-orange);
+    color: var(--color-white);
+  }
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-ring);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0s !important;
+      animation-duration: 0s !important;
+    }
+  }
+}

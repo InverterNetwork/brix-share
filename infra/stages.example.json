@@ -1,0 +1,15 @@
+{
+  "prod": {
+    "account": "123456789012",
+    "region": "eu-central-1",
+    "domainName": "share.example.com",
+    "hostedZone": {
+      "mode": "create",
+      "zoneName": "share.example.com"
+    },
+    "adminRolePattern": "aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_AdministratorAccess_*",
+    "customDomain": true,
+    "filesBucketSuffix": "0a1b2c3d4e5f",
+    "alarmTopicArns": ["arn:aws:sns:eu-central-1:123456789012:team-alerts"]
+  }
+}

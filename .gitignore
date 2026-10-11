@@ -1,0 +1,14 @@
+node_modules/
+dist/
+cdk.out/
+.env*
+*.log
+.DS_Store
+coverage/
+playwright-report/
+test-results/
+.vite/
+web/e2e/.kat/
+web/test-results/
+web/playwright-report/
+infra/stages.json
