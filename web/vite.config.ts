@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { buildInfo } from '../scripts/build-info.ts';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -40,8 +41,29 @@ function sri(): Plugin {
   };
 }
 
+const identity = buildInfo(process.env);
+
 export default defineConfig({
-  plugins: [tailwindcss(), sri()],
+  define: { __BUILD_INFO__: JSON.stringify(identity) },
+  plugins: [
+    tailwindcss(),
+    {
+      name: 'brix-build-info',
+      transformIndexHtml() {
+        return [
+          {
+            tag: 'meta',
+            attrs: {
+              name: 'brix-share-version',
+              content: `${identity.version} ${identity.commit}`,
+            },
+            injectTo: 'head',
+          },
+        ];
+      },
+    },
+    sri(),
+  ],
   oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
   build: {
     modulePreload: { polyfill: false },

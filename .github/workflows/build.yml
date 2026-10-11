@@ -26,6 +26,9 @@ jobs:
           node-version-file: a/.nvmrc
       - run: corepack enable
       - name: Build in a/ and b/
+        env:
+          BRIX_SHARE_VERSION: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') && github.ref_name || 'dev' }}
+          BRIX_SHARE_COMMIT: ${{ github.sha }}
         run: |
           for d in a b; do
             (cd "$d" && pnpm install --frozen-lockfile && pnpm --filter @brix-share/web build)

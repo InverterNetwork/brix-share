@@ -53,7 +53,11 @@ if (head !== tagged)
 // 2. Local build must equal the published release.
 say(`Building ${tag} locally`);
 run('pnpm', ['install', '--frozen-lockfile']);
-run('pnpm', ['--filter', '@brix-share/web', 'build']);
+run('pnpm', ['--filter', '@brix-share/web', 'build'], {
+  ...process.env,
+  BRIX_SHARE_VERSION: tag,
+  BRIX_SHARE_COMMIT: head,
+});
 const local = hashTree(join(root, 'web/dist'));
 const release = parseManifest(
   run('gh', ['release', 'download', tag, '--pattern', 'manifest.json', '--output', '-']),
