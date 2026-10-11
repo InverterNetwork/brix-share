@@ -6,7 +6,7 @@
 **[share.brix.money](https://share.brix.money)** · [How it works](https://share.brix.money/how-it-works) · [Privacy](https://share.brix.money/privacy) · [Acceptable use](https://share.brix.money/acceptable-use)
 
 - Design spec: [`docs/PLAN.md`](docs/PLAN.md). Design decisions: [`docs/DECISIONS.md`](docs/DECISIONS.md). Operations: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
-- Contributing, rules and roadmap: [`CONTRIBUTING.md`](CONTRIBUTING.md). Security reports: security@brix.money.
+- Contributing, rules and roadmap: [`CONTRIBUTING.md`](CONTRIBUTING.md). Security reports: security@brix.money, see [`SECURITY.md`](SECURITY.md).
 
 ## What it does
 
