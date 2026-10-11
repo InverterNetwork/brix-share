@@ -78,10 +78,10 @@ ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrom
 curl -fsS --compressed -A "$ua" "$url" | grep brix-share-version
 ```
 
-2. Confirm that the served version is [the latest release on GitHub](https://github.com/InverterNetwork/brix-share/releases/latest). An older legitimate release still passes its hash checks; if an older version is served live, something is wrong. Open `https://github.com/InverterNetwork/brix-share/releases/tag/<version>` and read `/index.html` in its hash table, or download the manifest and read that entry:
+2. Confirm that the served version is [the latest release on GitHub](https://github.com/InverterNetwork/brix-share/releases/latest). Right after a new release, the site can lag for a short while until it is deployed. An older legitimate release still passes its hash checks; an older version that stays live is a warning sign. Open `https://github.com/InverterNetwork/brix-share/releases/tag/<version>` and read `/index.html` in its hash table, or download the manifest and read that entry:
 
 ```sh
-# Replace vX.Y.Z with the latest release confirmed on GitHub.
+# Replace vX.Y.Z with the served version, after checking the latest release on GitHub.
 version=vX.Y.Z
 curl -fL "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -o manifest.json
 # Optional, with jq:
@@ -127,11 +127,12 @@ On Windows (PowerShell), use that same URL without the fragment:
 # Use the exact URL you are about to use, without its #fragment.
 $url = 'https://share.brix.money/'
 # For a share link: $url = 'https://share.brix.money/s/<id>'
-Invoke-WebRequest $url -OutFile index.html
+# Copy your browser's user agent here (this is an example):
+Invoke-WebRequest $url -UserAgent 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' -OutFile index.html
 Get-FileHash index.html -Algorithm SHA256
 ```
 
-Compare with the manifest's `/index.html` entry (hex case does not matter). Every path must return the same bytes. Equal hashes mean that response matches the release. This does not verify future loads, your browser or the server's access rules. Trust still depends on GitHub, the reviewed source and your own tools. If a hash differs, an older release is served or verification fails, **do not use the site**; report it to `security@brix.money`.
+Compare with the manifest's `/index.html` entry (hex case does not matter). Every path must return the same bytes. Equal hashes mean that response matches the release. This does not verify future loads, your browser or the server's access rules. Trust still depends on GitHub, the reviewed source and your own tools. If a hash differs, an older release stays live or verification fails, **do not use the site**; report it to `security@brix.money`.
 
 ### The copy your browser received
 
@@ -150,7 +151,7 @@ jq -j --arg url "$url" '.log.entries[] | select(.request.url == $url) | .respons
 jq -j --arg url "$url" '.log.entries[] | select(.request.url == $url) | .response.content.text' browser.har | base64 -d | shasum -a 256
 ```
 
-Brix Share registers no service workers. In Chrome DevTools > Application > Service workers, there must be none for `share.brix.money`. If one is present, unregister it, reload and repeat the checks.
+Brix Share registers no service workers. Check your browser's developer tools for service workers registered for `share.brix.money`; there must be none. If one is present, unregister it, reload and repeat the checks.
 
 ### Optional: check every file
 

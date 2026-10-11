@@ -66,8 +66,9 @@ export function VerifyScreen() {
             <a href={`${REPOSITORY}/releases/latest`} class="text-white underline">
               the latest release on GitHub
             </a>
-            . An older legitimate release still passes its hash checks; if an older version is
-            served live, something is wrong. Open{' '}
+            . Right after a new release, the site can lag for a short while until it is deployed. An
+            older legitimate release still passes its hash checks; an older version that stays live
+            is a warning sign. Open{' '}
             <a href={releaseUrl} class="text-white underline">
               the release
             </a>{' '}
@@ -115,15 +116,16 @@ export function VerifyScreen() {
           </P>
           <Code>{HAR_COMMAND}</Code>
           <P>
-            Brix Share registers no service workers. In Chrome DevTools &gt; Application &gt;
-            Service workers, there must be none for share.brix.money. If one is present, unregister
-            it, reload and repeat the checks.
+            Brix Share registers no service workers. Check your browser’s developer tools for
+            service workers registered for share.brix.money; there must be none. If one is present,
+            unregister it, reload and repeat the checks.
           </P>
           <H>Optional: check every file</H>
           <P>This also covers the proof-of-work worker and static assets.</P>
           <Code>{ALL_FILES_COMMAND}</Code>
           <P>
-            If any hash differs, or verification fails, do not use the site. Report it to{' '}
+            If any hash differs, an older release stays live or verification fails, do not use the
+            site. Report it to{' '}
             <a href="mailto:security@brix.money" class="text-white underline">
               security@brix.money
             </a>

@@ -5,7 +5,7 @@ url='https://share.brix.money/'
 # Copy your browser's user agent here (this is an example):
 ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
 curl -fsS --compressed -A "$ua" "$url" | grep brix-share-version`;
-export const MANIFEST_COMMAND = `# Replace vX.Y.Z with the latest release confirmed on GitHub.
+export const MANIFEST_COMMAND = `# Replace vX.Y.Z with the served version, after checking the latest release on GitHub.
 version=vX.Y.Z
 curl -fL "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -o manifest.json
 # Optional, with jq:
@@ -29,7 +29,8 @@ curl -fsSI --compressed -A "$ua" "$url" | grep -i '^cache-control:'`;
 export const WINDOWS_COMMAND = `# Use the exact URL you are about to use, without its #fragment.
 $url = 'https://share.brix.money/'
 # For a share link: $url = 'https://share.brix.money/s/<id>'
-Invoke-WebRequest $url -OutFile index.html
+# Copy your browser's user agent here (this is an example):
+Invoke-WebRequest $url -UserAgent 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' -OutFile index.html
 Get-FileHash index.html -Algorithm SHA256`;
 export const ALL_FILES_COMMAND = `# Requires jq and bash. Runs in a subshell so your shell stays unchanged.
 (
