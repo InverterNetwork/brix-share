@@ -5,6 +5,7 @@ const ROUTES = [
   '/',
   '/how-it-works',
   '/privacy',
+  '/verify',
   '/acceptable-use',
   '/s/AAAAAAAAAAAAAAAAAAAAAA',
   '/m/AAAAAAAAAAAAAAAAAAAAAA',

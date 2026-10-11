@@ -60,6 +60,95 @@ Known-answer test vectors (`shared/vectors/kat-v1.json`) pin the protocol; they 
 
 The full threat model is PLAN section 4.
 
+## Verify this site
+
+Encryption happens in your browser: the code it loads decides whether your secret stays private. Brix Share is open source, its web build is reproducible, and every release publishes SHA-256 hashes of every served file on GitHub, with an artifact attestation signing the manifest. Anyone can rebuild the tag and compare with the manifest; that reproducibility is the underlying root of trust.
+
+The release's `index.html` pins the entry script and stylesheet with Subresource Integrity hashes the browser enforces. All code that handles secrets is bundled into that script, so matching `index.html` pins that code. The expected hash must come from GitHub, never from the site being checked.
+
+1. Read the deployed version (a label, not proof); confirm the tag independently on GitHub:
+
+```sh
+curl -fsS https://share.brix.money/ | grep brix-share-version
+```
+
+2. Open `https://github.com/InverterNetwork/brix-share/releases/tag/<version>` and read `/index.html` in the release notes' hash table, or download the manifest and read that entry:
+
+```sh
+# Replace vX.Y.Z with the version you saw; inspect that release on GitHub too.
+version=vX.Y.Z
+curl -fL "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -o manifest.json
+# Optional, with jq:
+jq -r '.files["/index.html"]' manifest.json
+```
+
+3. Optionally verify the manifest with the [GitHub CLI](https://cli.github.com/manual/gh_attestation_verify). Check the reported workflow, tag and commit against the release. Repository verification alone does not select a particular tag; constrain the signer and source ref too:
+
+```sh
+gh attestation verify manifest.json -R InverterNetwork/brix-share
+# Also constrain the signer and tag (recommended):
+gh attestation verify manifest.json -R InverterNetwork/brix-share \
+  --signer-workflow InverterNetwork/brix-share/.github/workflows/release.yml \
+  --source-ref "refs/tags/$version"
+```
+
+The attestation establishes where this manifest came from and detects replacement with different bytes; it does not prove the source is safe. Older releases predating attestations do not have one.
+
+4. Hash the served document on macOS or Linux:
+
+```sh
+curl -fsS https://share.brix.money/index.html | shasum -a 256
+# Linux:
+curl -fsS https://share.brix.money/index.html | sha256sum
+```
+
+On Windows (PowerShell):
+
+```powershell
+Invoke-WebRequest https://share.brix.money/index.html -OutFile index.html
+Get-FileHash index.html -Algorithm SHA256
+```
+
+Compare with the manifest's `/index.html` entry (hex case does not matter). Equal hashes mean that response matches the release. This does not verify future loads, your browser or the server's access rules. Trust still depends on GitHub, the reviewed source and your own tools. If a hash differs or verification fails, **do not use the site**; report it to `security@brix.money`.
+
+### The copy your browser received
+
+A server could send curl the release but your browser a different document. Hashing the browser's original document response is stronger. “Save page as”, copying the DOM or copying view-source text can change bytes; do not treat those as the response.
+
+If you have a Network HAR export that includes response content, extract its document entry without adding a newline. Check there is exactly one matching entry and that `content.text` is present. An export without response bodies cannot verify the document. The extraction below is tested against Playwright HAR recordings in Chromium, Firefox and WebKit, including non-ASCII text and trailing newlines. Native Chrome, Firefox and Safari export menus have not been validated; browser-specific UI instructions await that validation. Keep captures limited to the public landing page, without creating or opening secrets.
+
+```sh
+# Requires jq; use a HAR that includes response content.
+# Set url to the exact document URL your browser loaded.
+url=https://share.brix.money/
+jq -e --arg url "$url" '[.log.entries[] | select(.request.url == $url)] | length == 1 and (.[0].response.content.text | type == "string")' browser.har
+jq -r --arg url "$url" '.log.entries[] | select(.request.url == $url) | .response.content.encoding // "text"' browser.har
+# If encoding is "text":
+jq -j --arg url "$url" '.log.entries[] | select(.request.url == $url) | .response.content.text' browser.har | shasum -a 256
+# If encoding is "base64" (Linux uses base64 --decode):
+jq -j --arg url "$url" '.log.entries[] | select(.request.url == $url) | .response.content.text' browser.har | base64 -D | shasum -a 256
+```
+
+### Optional: check every file
+
+This also checks the proof-of-work worker and static assets. Requires `jq` and bash:
+
+```bash
+# Requires jq. Run in bash; replace the base for a local build.
+set -o pipefail
+base=https://share.brix.money
+while IFS=$'\t' read -r path expected; do
+  actual=$(curl -fsS "$base$path" | shasum -a 256) || exit 1
+  actual=${actual%% *}
+  [ "$actual" = "$expected" ] || { echo "MISMATCH $path"; exit 1; }
+  echo "OK $path"
+done < <(jq -r '.files | to_entries[] | [.key, .value] | @tsv' manifest.json)
+```
+
+The proof-of-work worker is outside the SRI chain (Workers cannot carry SRI); it receives no keys or secret content. For the highest-value keys, encrypt to the recipient's verified public key first and use Brix Share as transport.
+
+The site's [/verify page](https://share.brix.money/verify) repeats these steps, but it could be tampered with too. This README on GitHub is the canonical copy; a “verified” badge from the page or backend would prove nothing against a changed frontend.
+
 ## Repository layout
 
 pnpm workspace, Node 22 (`.nvmrc`):
@@ -78,88 +167,12 @@ pnpm workspace, Node 22 (`.nvmrc`):
 
 ## Working on it
 
-```sh
-fnm use                 # Node 22
-corepack enable         # pnpm from packageManager
-pnpm install
-
-pnpm lint               # ESLint (type-checked) + Prettier
-pnpm typecheck
-pnpm test               # Vitest everywhere; API and sweeper tests start DynamoDB Local in Docker
-pnpm build              # web build (reproducible, SRI)
-BRIX_SHARE_STAGES=infra/stages.example.json pnpm synth   # CDK synth with the example stage config, no AWS credentials
-pnpm --filter @brix-share/web e2e   # Playwright in Chromium, Firefox, WebKit, Pixel 7, iPhone 14 (Docker)
-```
-
-Local app with a real API: `web/e2e/server.ts` serves the built site with production headers, routes `/api/*` into the real handler on DynamoDB Local, and fakes S3 on a second port. See `web/scripts/e2e-docker.sh` for how the suite starts it.
-
-Rules that matter (details in [`CONTRIBUTING.md`](CONTRIBUTING.md)):
-- No crypto libraries. Browser: WebCrypto. Server: `node:crypto` for hashing and HMAC.
-- New dependencies need approval; versions are pinned exactly and pnpm keeps a 7-day release cooldown.
-- Never log bodies, tokens, envelopes, ciphertext or presigned URLs.
-- Existing known-answer vectors are frozen; changing the protocol means protocol `v2`.
-- CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, the Playwright suite, a build-twice reproducibility check and `cdk synth`. CI has no AWS credentials.
+Setup, checks, dependency rules and workflow: [CONTRIBUTING.md](CONTRIBUTING.md). The local app and API test server are in `web/e2e/`; the Playwright suite runs in Docker.
 
 ## Deploying
 
-Deploys are manual, by an admin with an SSO session. Nothing deploys from CI. Full details and incident procedures: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
-
-There is one stage, `prod`, in region eu-central-1, with the certificate and WAF in us-east-1:
-
-| Stack | Region | Contents |
-|---|---|---|
-| `BrixShare-prod-zone` | us-east-1 | Route 53 zone `share.brix.money` |
-| `BrixShare-prod-edge` | us-east-1 | WAF; ACM certificate once the custom domain is on |
-| `BrixShare-prod` | eu-central-1 | Table, buckets, Lambdas, CloudFront, alarms, parameters, web deploy role |
-
-### Prerequisites
-
-`<prod-admin-profile>` is your own AWS CLI profile with admin access to the prod account (SSO or otherwise); `<prod-readonly-profile>` one with read-only access. Profile names are local to each machine, so the docs use placeholders.
-
-```sh
-aws sso login --profile <prod-admin-profile>
-export AWS_PROFILE=<prod-admin-profile>
-gh auth status          # deploy-web sets a repository variable, which needs admin rights
-```
-
-### 1. Infrastructure and API
-
-```sh
-git checkout main && git pull
-scripts/deploy-infra.sh prod
-```
-
-The script refuses a dirty tree or a commit that is not on `origin/main` (the Lambda code is bundled from your checkout), shows `cdk diff`, asks, deploys zone, edge and main in that order, and records the deployed commit in the repository variable `DEPLOYED_INFRA_PROD`.
-
-### 2. Web app
-
-```sh
-git tag vX.Y.Z && git push origin vX.Y.Z   # the release workflow builds twice and publishes manifest.json
-git checkout vX.Y.Z
-node scripts/deploy-web.ts prod vX.Y.Z --dry-run
-node scripts/deploy-web.ts prod vX.Y.Z
-```
-
-`deploy-web.ts` rebuilds locally and refuses to deploy unless every file equals the release manifest CI published. It then assumes the web deploy role (the only principal allowed to write the site), uploads assets before `index.html` with explicit types and caching, invalidates the cache and records the release in `DEPLOYED_PROD` for the monitor.
-
-### 3. Verify
-
-```sh
-node scripts/verify-live.ts prod <site url> vX.Y.Z
-AWS_PROFILE=<prod-readonly-profile> node scripts/scrub-logs.ts prod /tmp/brix-verify-<run>.json
-```
-
-`verify-live` runs every flow against the live site with the real client crypto (create with proof-of-work, reveal, N views, release later, passphrase, files through the real bucket, delete, link-preview GET) and checks headers and every served file against the release. `scrub-logs` then proves none of the ids, tokens, keys or ciphertexts from that run appear in the logs.
-
-### Stage config and first deploy
-
-Account, domain, zone and alert routing are not in the repository. Maintainers keep them in the `STAGES_JSON` repository variable; the deploy scripts write it to the git-ignored `infra/stages.json` (format: `infra/stages.example.json`). Bringing up a new stage, from the CloudFront default domain to the custom domain, is described in the runbook.
-
-### After a deploy
-
-- The `monitor` workflow checks the live site hourly against the deployed release (files and headers) and alerts Slack if `SLACK_WEBHOOK_URL` is set.
-- Alarms go to the stage's topic and to the topics in `alarmTopicArns` (prod: the team's alerts Slack channel); `alarmEmail` adds an e-mail subscription.
-- Circuit breaker, proof-of-work difficulty, full purge, reading access logs: see the runbook.
+Deploys are manual, by a maintainer with admin access. Nothing deploys from CI.
+See [the deployment guide](docs/DEPLOYING.md) and [operations runbook](docs/RUNBOOK.md).
 
 ## License
 

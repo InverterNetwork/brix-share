@@ -14,6 +14,7 @@ import { CreateScreen } from './screens/create.tsx';
 import { ManageScreen } from './screens/manage.tsx';
 import { ResultScreen } from './screens/result.tsx';
 import { RevealScreen } from './screens/reveal.tsx';
+import { VerifyScreen } from './screens/verify.tsx';
 import { Shell } from './ui/shell.tsx';
 
 type View = Route | { name: 'result'; secret: CreatedSecret };
@@ -24,6 +25,7 @@ const TITLES: Record<View['name'], string> = {
   reveal: 'Secret · Brix Share',
   manage: 'Manage secret · Brix Share',
   how: 'How it works · Brix Share',
+  verify: 'Verify this site · Brix Share',
   privacy: 'Privacy · Brix Share',
   acceptable: 'Acceptable use · Brix Share',
   notfound: 'Not found · Brix Share',
@@ -120,6 +122,9 @@ function App({ initial }: { initial: Route }) {
       break;
     case 'how':
       screen = <HowItWorksScreen />;
+      break;
+    case 'verify':
+      screen = <VerifyScreen />;
       break;
     case 'privacy':
       screen = <PrivacyScreen />;

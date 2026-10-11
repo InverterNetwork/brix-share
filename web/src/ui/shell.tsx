@@ -1,3 +1,4 @@
+import { BUILD_INFO, REPOSITORY } from '../build-info.ts';
 import type { ComponentChildren } from 'preact';
 
 /** Brix mark (design/brand/assets/logo-mark.svg), white only. */
@@ -59,7 +60,7 @@ export function Shell({
       </main>
       <footer class="flex flex-wrap justify-between gap-4 border-t border-line-soft pt-6 pb-10 text-xs text-muted">
         <p>Encrypted in your browser. Brix never sees the secret, the key or the file names.</p>
-        <p class="flex gap-3">
+        <p class="flex flex-wrap gap-3">
           <a
             href="/how-it-works"
             onClick={link('/how-it-works')}
@@ -90,6 +91,28 @@ export function Shell({
             class="text-fg-3 no-underline hover:underline"
           >
             brix.money
+          </a>
+        </p>
+        <p class="flex flex-wrap gap-3">
+          {BUILD_INFO.version === 'dev' ? (
+            <span>dev</span>
+          ) : (
+            <a
+              href={`${REPOSITORY}/releases/tag/${BUILD_INFO.version}`}
+              class="text-fg-3 no-underline hover:underline"
+            >
+              {BUILD_INFO.version}
+            </a>
+          )}
+          <span aria-hidden="true">·</span>
+          <span>build {BUILD_INFO.commit}</span>
+          <span aria-hidden="true">·</span>
+          <a
+            href="/verify"
+            onClick={link('/verify')}
+            class="text-fg-3 no-underline hover:underline"
+          >
+            Verify this site
           </a>
         </p>
       </footer>

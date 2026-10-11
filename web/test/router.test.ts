@@ -9,6 +9,7 @@ describe('router', () => {
     expect(parseRoute('/', '')).toEqual({ name: 'create' });
     expect(parseRoute('/how-it-works', '')).toEqual({ name: 'how' });
     expect(parseRoute('/about', '')).toEqual({ name: 'how' });
+    expect(parseRoute('/verify', '')).toEqual({ name: 'verify' });
     expect(parseRoute('/privacy', '')).toEqual({ name: 'privacy' });
     expect(parseRoute('/acceptable-use', '')).toEqual({ name: 'acceptable' });
     expect(parseRoute(`/s/${ID}`, KEY)).toEqual({ name: 'reveal', id: ID, key: KEY });

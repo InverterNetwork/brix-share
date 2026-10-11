@@ -60,6 +60,7 @@ export async function checkDelivery(
   files: Record<string, string> | null,
   /** The files bucket origin the CSP must allow, from the stage config; never taken from the response. */
   expectedFilesOrigin: string,
+  expectedRelease?: string,
 ): Promise<string[]> {
   const failures: string[] = [];
   const root = await get(base, '/');
@@ -78,6 +79,7 @@ export async function checkDelivery(
     '/about',
     '/how-it-works',
     '/privacy',
+    '/verify',
     '/acceptable-use',
   ];
   const indexHashes = new Set<string>();
@@ -89,6 +91,16 @@ export async function checkDelivery(
       failures.push(`${path}: cache-control ${res.headers.get('cache-control')}`);
     if (res.headers.get('content-type') !== contentType('/index.html'))
       failures.push(`${path}: content-type ${res.headers.get('content-type')}`);
+    if (expectedRelease) {
+      const html = new TextDecoder().decode(body);
+      const identities = [
+        ...html.matchAll(
+          /<meta name="brix-share-version" content="([^" ]+) ([0-9a-f]{7})"\s*\/?\s*>/g,
+        ),
+      ];
+      if (identities.length !== 1 || identities[0]?.[1] !== expectedRelease)
+        failures.push(`${path}: build version does not match deployed release ${expectedRelease}`);
+    }
     indexHashes.add(sha256Hex(body));
   }
   if (indexHashes.size !== 1)
