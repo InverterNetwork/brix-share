@@ -166,7 +166,7 @@ This also checks the proof-of-work worker and static assets. Requires `jq` and b
   jq -er '.files | to_entries[] | [.key, .value] | @tsv' manifest.json > /dev/null || exit 1
   while IFS=$'\t' read -r path expected; do
     actual=$(curl -fsS --compressed -A "$ua" "$base$path" | shasum -a 256) || exit 1
-    actual=${}actual%% *}
+    actual=${actual%% *}
     [ "$actual" = "$expected" ] || { echo "MISMATCH $path"; exit 1; }
     echo "OK $path"
   done < <(jq -r '.files | to_entries[] | [.key, .value] | @tsv' manifest.json)
