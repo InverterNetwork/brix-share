@@ -195,8 +195,7 @@ export function VerifyScreen() {
             os={os}
             text={pick(commands.HASH_COMMAND, commands.WINDOWS_HASH_COMMAND)}
           >
-            Hash the same fragment-free URL with your browser’s user agent and check that its
-            headers show Cache-Control: no-store.
+            Hash the same fragment-free URL and check that its headers show Cache-Control: no-store.
           </Step>
           <Step
             number={4}
@@ -247,10 +246,10 @@ export function VerifyScreen() {
           </Deeper>
           <Deeper title="Check the copy your browser received" id="verify-browser">
             <P>
-              A site could send curl the release and your browser a different document. In DevTools’
-              Network panel, load the exact URL without its #fragment and export the original
-              document response as browser.har with content; loading /s/&lt;id&gt; counts nothing,
-              only clicking Reveal does.
+              A server can treat curl differently from a browser, so checking the copy your browser
+              received is the stronger test. In DevTools’ Network panel, load the exact URL without
+              its #fragment and export the original document response as browser.har with content;
+              loading /s/&lt;id&gt; counts nothing, only clicking Reveal does.
             </P>
             <P>
               Extract exactly one matching response without adding a newline and compare it with the

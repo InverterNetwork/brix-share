@@ -73,9 +73,7 @@ The release's `index.html` pins the entry script and stylesheet with Subresource
 url='https://share.brix.money/'
 # For a share link, replace <id> with its actual id:
 # url='https://share.brix.money/s/<id>'
-# Copy your browser's user agent here (this is an example):
-ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-curl -fsS --compressed -A "$ua" "$url" | grep brix-share-version
+curl -fsS --compressed "$url" | grep brix-share-version
 ```
 
 2. Confirm that the served version is [the latest release on GitHub](https://github.com/InverterNetwork/brix-share/releases/latest). Right after a new release, the site can lag for a short while until it is deployed. An older legitimate release still passes its hash checks; an older version that stays live is a warning sign. Open `https://github.com/InverterNetwork/brix-share/releases/tag/<version>` and read `/index.html` in its hash table, or download the manifest and read that entry:
@@ -110,15 +108,15 @@ gh attestation verify manifest.json -R InverterNetwork/brix-share \
 
 The attestation establishes where this manifest came from and detects replacement with different bytes; it does not prove the source is safe. Older releases predating attestations do not have one.
 
-4. Hash the response from that same exact URL on macOS or Linux. `--compressed` hashes the decompressed body, matching the manifest. Use your browser's user agent; response headers must show `Cache-Control: no-store`:
+4. Hash the response from that same exact URL on macOS or Linux. `--compressed` hashes the decompressed body, matching the manifest. Response headers must show `Cache-Control: no-store`:
 
 ```sh
 # Hash the same exact $url set above, without its #fragment.
-curl -fsS --compressed -A "$ua" "$url" | shasum -a 256
-# Linux:
-curl -fsS --compressed -A "$ua" "$url" | sha256sum
+curl -fsS --compressed "$url" | (
+  if command -v shasum >/dev/null; then shasum -a 256; else sha256sum; fi
+)
 # Response headers must show Cache-Control: no-store:
-curl -fsSI --compressed -A "$ua" "$url" | grep -i '^cache-control:'
+curl -fsSI --compressed "$url" | grep -i '^cache-control:'
 ```
 
 On Windows (PowerShell), use that same URL without the fragment:
@@ -127,8 +125,7 @@ On Windows (PowerShell), use that same URL without the fragment:
 # Use the exact URL you are about to use, without its #fragment.
 $url = 'https://share.brix.money/'
 # For a share link: $url = 'https://share.brix.money/s/<id>'
-# Copy your browser's user agent here (this is an example):
-Invoke-WebRequest $url -UserAgent 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' -OutFile index.html
+Invoke-WebRequest $url -OutFile index.html
 Get-FileHash index.html -Algorithm SHA256
 ```
 
@@ -136,7 +133,7 @@ Compare with the manifest's `/index.html` entry (hex case does not matter). Ever
 
 ### The copy your browser received
 
-A server could send curl the release but your browser a different document. Hashing the browser's original document response is stronger. “Save page as”, copying the DOM or copying view-source text can change bytes; do not treat those as the response.
+A server can treat curl differently from a browser, so checking the copy your browser received is the stronger test. “Save page as”, copying the DOM or copying view-source text can change bytes; do not treat those as the response.
 
 Open DevTools' Network panel, load the exact URL without its `#fragment`, and export a HAR with response content as `browser.har`. Loading `/s/<id>` does not consume a retrieval; only clicking Reveal does. Select the document response, not an API response. Extract it without adding a newline and compare with the manifest's `/index.html` hash. The commands require exactly one matching response with content. Browser-menu exports have not been checked in every browser.
 
@@ -162,11 +159,10 @@ This also checks the proof-of-work worker and static assets. Requires `jq` and b
 (
   set -o pipefail
   base=https://share.brix.money
-  ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
   # Validate the manifest before the loop; failed downloads or hashes stop this check.
   jq -er '.files | to_entries[] | [.key, .value] | @tsv' manifest.json > /dev/null || exit 1
   while IFS=$'\t' read -r path expected; do
-    actual=$(curl -fsS --compressed -A "$ua" "$base$path" | shasum -a 256) || exit 1
+    actual=$(curl -fsS --compressed "$base$path" | shasum -a 256) || exit 1
     actual=${actual%% *}
     [ "$actual" = "$expected" ] || { echo "MISMATCH $path"; exit 1; }
     echo "OK $path"
@@ -176,15 +172,13 @@ This also checks the proof-of-work worker and static assets. Requires `jq` and b
 
 ### PowerShell commands
 
-The /verify OS selector uses these PowerShell equivalents for the same checks; set the exact fragment-free URL and your browser user agent first. The deeper checks use the same served release version.
+The /verify OS selector uses these PowerShell equivalents for the same checks; set the exact fragment-free URL first. The deeper checks use the same served release version.
 
 ```powershell
 # Use the exact URL without its #fragment; replace <id> for a share link.
 $url = 'https://share.brix.money/'
 # $url = 'https://share.brix.money/s/<id>'
-# Copy your browser's user agent here (this is an example):
-$ua = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-(Invoke-WebRequest $url -UserAgent $ua -ErrorAction Stop).Content | Select-String 'brix-share-version'
+(Invoke-WebRequest $url -ErrorAction Stop).Content | Select-String 'brix-share-version'
 ```
 
 ```powershell
@@ -194,11 +188,11 @@ Invoke-WebRequest "https://github.com/InverterNetwork/brix-share/releases/downlo
 ```
 
 ```powershell
-# Use the same exact $url and $ua set above, without the #fragment.
-Invoke-WebRequest $url -UserAgent $ua -OutFile index.html -ErrorAction Stop
+# Use the same exact $url set above, without the #fragment.
+Invoke-WebRequest $url -OutFile index.html -ErrorAction Stop
 Get-FileHash index.html -Algorithm SHA256
 # Must show no-store:
-(Invoke-WebRequest $url -UserAgent $ua -Method Head -ErrorAction Stop).Headers['Cache-Control']
+(Invoke-WebRequest $url -Method Head -ErrorAction Stop).Headers['Cache-Control']
 ```
 
 ```powershell
@@ -237,51 +231,14 @@ Get-FileHash browser-index.html -Algorithm SHA256
 & {
   $ErrorActionPreference = 'Stop'
   $base = 'https://share.brix.money'
-  $ua = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
   $manifest = Get-Content manifest.json -Raw -Encoding UTF8 | ConvertFrom-Json
   $files = @($manifest.files.PSObject.Properties)
   if ($files.Count -eq 0) { throw 'Manifest has no files' }
   $temp = [IO.Path]::GetTempFileName()
   try {
     foreach ($file in $files) {
-      if (!$file.Name.StartsWith('/') -or $file.Value -notmatch '^[0-9a-f]{64} (Workers cannot carry SRI); it receives no keys or secret content. For the highest-value keys, encrypt to the recipient's verified public key first and use Brix Share as transport.
-
-The site's [/verify page](https://share.brix.money/verify) repeats these steps, but it could be tampered with too. This README on GitHub is the canonical copy; a “verified” badge from the page or backend would prove nothing against a changed frontend.
-
-## Repository layout
-
-pnpm workspace, Node 22 (`.nvmrc`):
-
-| Path | What |
-|---|---|
-| `shared/` | Protocol constants, strict base64url, AAD builders, Zod schemas, request validation, manage-token hash, proof-of-work rules, known-answer vectors |
-| `api/` | The single API Lambda: challenge, create, finalize, consume, status, delete; DynamoDB repository; S3 file store |
-| `sweeper/` | 5-minute cleanup Lambda and the proof-of-work governor |
-| `web/` | Vite + Preact + Tailwind app; all cryptography (`web/src/crypto`); Playwright suite and local test server (`web/e2e`) |
-| `infra/` | CDK app: zone, edge (WAF, certificate) and main stacks; stage config format in `infra/stages.example.json` |
-| `scripts/` | Release manifests, deploy scripts, live verification, log scrub, monitor |
-| `design/` | Brand tokens and logos (reference) |
-| `assets/` | README artwork |
-| `docs/` | Design spec, decisions, runbook |
-
-## Working on it
-
-Setup, checks, dependency rules and workflow: [CONTRIBUTING.md](CONTRIBUTING.md). The local app and API test server are in `web/e2e/`; the Playwright suite runs in Docker.
-
-## Deploying
-
-Deploys are manual, by a maintainer with admin access. Nothing deploys from CI.
-See [the deployment guide](docs/DEPLOYING.md) and [operations runbook](docs/RUNBOOK.md).
-
-## License
-
-Copyright (C) 2026 Brix. The source code is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only): you may use, change and run it, including as a hosted service, as long as you publish your changes under the same licence.
-
-Not covered by that licence:
-- **The Brix brand.** The Brix name, the Brix and Brix Share logos (`assets/`, `design/brand/assets/`, the mark in `web/src/ui/shell.tsx`, `web/public/favicon.svg`) and the Brix visual identity belong to Brix and are not licensed for reuse. All rights reserved. A fork must remove them and use its own name and branding before it is deployed for others.
-- **Fonts** in `web/src/assets/fonts` are third-party works under the SIL Open Font License; see `LICENSE.md` there.
-) { throw 'Invalid manifest entry' }
-      Invoke-WebRequest "$base$($file.Name)" -UserAgent $ua -OutFile $temp
+      if (!$file.Name.StartsWith('/') -or $file.Value -notmatch '^[0-9a-f]{64}$') { throw 'Invalid manifest entry' }
+      Invoke-WebRequest "$base$($file.Name)" -OutFile $temp
       $actual = (Get-FileHash $temp -Algorithm SHA256).Hash
       if ($actual -ne $file.Value) { throw "MISMATCH $($file.Name)" }
       "OK $($file.Name)"

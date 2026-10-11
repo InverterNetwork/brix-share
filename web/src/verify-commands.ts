@@ -2,9 +2,7 @@ export const VERSION_COMMAND = `# Use the exact URL you are about to use, withou
 url='https://share.brix.money/'
 # For a share link, replace <id> with its actual id:
 # url='https://share.brix.money/s/<id>'
-# Copy your browser's user agent here (this is an example):
-ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-curl -fsS --compressed -A "$ua" "$url" | grep brix-share-version`;
+curl -fsS --compressed "$url" | grep brix-share-version`;
 export const MANIFEST_COMMAND = `# Replace vX.Y.Z with the served version, after checking the latest release on GitHub.
 version=vX.Y.Z
 curl -fL "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -o manifest.json
@@ -21,26 +19,24 @@ gh attestation verify manifest.json -R InverterNetwork/brix-share \\
   --signer-workflow InverterNetwork/brix-share/.github/workflows/release.yml \\
   --source-ref "refs/tags/$version"`;
 export const HASH_COMMAND = `# Hash the same exact $url set above, without its #fragment.
-curl -fsS --compressed -A "$ua" "$url" | shasum -a 256
-# Linux:
-curl -fsS --compressed -A "$ua" "$url" | sha256sum
+curl -fsS --compressed "$url" | (
+  if command -v shasum >/dev/null; then shasum -a 256; else sha256sum; fi
+)
 # Response headers must show Cache-Control: no-store:
-curl -fsSI --compressed -A "$ua" "$url" | grep -i '^cache-control:'`;
+curl -fsSI --compressed "$url" | grep -i '^cache-control:'`;
 export const WINDOWS_COMMAND = `# Use the exact URL you are about to use, without its #fragment.
 $url = 'https://share.brix.money/'
 # For a share link: $url = 'https://share.brix.money/s/<id>'
-# Copy your browser's user agent here (this is an example):
-Invoke-WebRequest $url -UserAgent 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' -OutFile index.html
+Invoke-WebRequest $url -OutFile index.html
 Get-FileHash index.html -Algorithm SHA256`;
 export const ALL_FILES_COMMAND = `# Requires jq and bash. Runs in a subshell so your shell stays unchanged.
 (
   set -o pipefail
   base=https://share.brix.money
-  ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
   # Validate the manifest before the loop; failed downloads or hashes stop this check.
   jq -er '.files | to_entries[] | [.key, .value] | @tsv' manifest.json > /dev/null || exit 1
   while IFS=$'\\t' read -r path expected; do
-    actual=$(curl -fsS --compressed -A "$ua" "$base$path" | shasum -a 256) || exit 1
+    actual=$(curl -fsS --compressed "$base$path" | shasum -a 256) || exit 1
     actual=\${actual%% *}
     [ "$actual" = "$expected" ] || { echo "MISMATCH $path"; exit 1; }
     echo "OK $path"
@@ -59,17 +55,15 @@ export const COMPARE_COMMAND = `jq -r '.files["/index.html"]' manifest.json`;
 export const WINDOWS_VERSION_COMMAND = `# Use the exact URL without its #fragment; replace <id> for a share link.
 $url = 'https://share.brix.money/'
 # $url = 'https://share.brix.money/s/<id>'
-# Copy your browser's user agent here (this is an example):
-$ua = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-(Invoke-WebRequest $url -UserAgent $ua -ErrorAction Stop).Content | Select-String 'brix-share-version'`;
+(Invoke-WebRequest $url -ErrorAction Stop).Content | Select-String 'brix-share-version'`;
 export const WINDOWS_MANIFEST_COMMAND = `# Use the served version, after checking the latest release on GitHub.
 $version = 'vX.Y.Z'
 Invoke-WebRequest "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -OutFile manifest.json -ErrorAction Stop`;
-export const WINDOWS_HASH_COMMAND = `# Use the same exact $url and $ua set above, without the #fragment.
-Invoke-WebRequest $url -UserAgent $ua -OutFile index.html -ErrorAction Stop
+export const WINDOWS_HASH_COMMAND = `# Use the same exact $url set above, without the #fragment.
+Invoke-WebRequest $url -OutFile index.html -ErrorAction Stop
 Get-FileHash index.html -Algorithm SHA256
 # Must show no-store:
-(Invoke-WebRequest $url -UserAgent $ua -Method Head -ErrorAction Stop).Headers['Cache-Control']`;
+(Invoke-WebRequest $url -Method Head -ErrorAction Stop).Headers['Cache-Control']`;
 export const WINDOWS_COMPARE_COMMAND = `(Get-Content manifest.json -Raw -Encoding UTF8 | ConvertFrom-Json).files.'/index.html'`;
 export const WINDOWS_ATTEST_COMMAND = `gh attestation verify manifest.json -R InverterNetwork/brix-share --signer-workflow InverterNetwork/brix-share/.github/workflows/release.yml --source-ref "refs/tags/$version"`;
 export const WINDOWS_COMMIT_COMMAND = `# In a clone; paste the full release commit from GitHub.
@@ -93,7 +87,6 @@ export const WINDOWS_ALL_FILES_COMMAND = `# A local scope keeps options and fail
 & {
   $ErrorActionPreference = 'Stop'
   $base = 'https://share.brix.money'
-  $ua = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
   $manifest = Get-Content manifest.json -Raw -Encoding UTF8 | ConvertFrom-Json
   $files = @($manifest.files.PSObject.Properties)
   if ($files.Count -eq 0) { throw 'Manifest has no files' }
@@ -101,7 +94,7 @@ export const WINDOWS_ALL_FILES_COMMAND = `# A local scope keeps options and fail
   try {
     foreach ($file in $files) {
       if (!$file.Name.StartsWith('/') -or $file.Value -notmatch '^[0-9a-f]{64}$') { throw 'Invalid manifest entry' }
-      Invoke-WebRequest "$base$($file.Name)" -UserAgent $ua -OutFile $temp
+      Invoke-WebRequest "$base$($file.Name)" -OutFile $temp
       $actual = (Get-FileHash $temp -Algorithm SHA256).Hash
       if ($actual -ne $file.Value) { throw "MISMATCH $($file.Name)" }
       "OK $($file.Name)"
