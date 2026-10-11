@@ -58,4 +58,3 @@ Account, domain, zone and alert routing are not in the repository. Maintainers k
 - The `monitor` workflow checks the live site hourly against the deployed release (files and headers) and alerts Slack if `SLACK_WEBHOOK_URL` is set.
 - Alarms go to the stage's topic and to the topics in `alarmTopicArns` (prod: the team's alerts Slack channel); `alarmEmail` adds an e-mail subscription.
 - Circuit breaker, proof-of-work difficulty, full purge, reading access logs: see the runbook.
-
