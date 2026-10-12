@@ -5,9 +5,7 @@ url='https://share.brix.money/'
 curl -fsS --compressed "$url" | grep brix-share-version`;
 export const MANIFEST_COMMAND = `# Replace vX.Y.Z with the served version, after checking the latest release on GitHub.
 version=vX.Y.Z
-curl -fL "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -o manifest.json
-# Optional, with jq:
-jq -r '.files["/index.html"]' manifest.json`;
+curl -fL "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -o manifest.json`;
 export const COMMIT_COMMAND = `# In a clone of InverterNetwork/brix-share; paste the full release commit from GitHub.
 commit=FULL_RELEASE_COMMIT_SHA
 git fetch origin main
@@ -19,9 +17,8 @@ gh attestation verify manifest.json -R InverterNetwork/brix-share \\
   --signer-workflow InverterNetwork/brix-share/.github/workflows/release.yml \\
   --source-ref "refs/tags/$version"`;
 export const HASH_COMMAND = `# Hash the same exact $url set above, without its #fragment.
-curl -fsS --compressed "$url" | (
-  if command -v shasum >/dev/null; then shasum -a 256; else sha256sum; fi
-)
+curl -fsS --compressed "$url" | shasum -a 256
+# Linux without shasum: use sha256sum instead
 # Response headers must show Cache-Control: no-store:
 curl -fsSI --compressed "$url" | grep -i '^cache-control:'`;
 export const WINDOWS_COMMAND = `# Use the exact URL you are about to use, without its #fragment.

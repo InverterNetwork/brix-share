@@ -75,6 +75,11 @@ test('OS selector changes every command; details, keyboard, copying, CSP and scr
   }
   const unix = await page.locator('pre code').allTextContents();
   expect(unix).toHaveLength(8);
+  expect(unix[1]).not.toContain('jq');
+  expect(unix[2]).toContain('curl -fsS --compressed "$url" | shasum -a 256');
+  expect(unix[2]).toContain('# Linux without shasum: use sha256sum instead');
+  expect(unix[2]).not.toContain('command -v');
+  expect(unix[3]).toBe(`jq -r '.files["/index.html"]' manifest.json`);
   await selector.getByRole('radio', { name: 'macOS / Linux' }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(selector.getByRole('radio', { name: 'Windows' })).toBeFocused();

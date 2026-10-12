@@ -141,9 +141,7 @@ export function VerifyScreen() {
         </ol>
         <p class="mt-4 text-sm leading-relaxed text-fg-3">
           Anyone can rebuild the tag and compare it with the manifest: reproducibility is the
-          underlying root of trust. The release’s index.html pins the entry script and stylesheet
-          with integrity hashes the browser enforces; all code that handles secrets is bundled into
-          that script.
+          underlying root of trust.
         </p>
       </section>
 
@@ -195,7 +193,8 @@ export function VerifyScreen() {
             os={os}
             text={pick(commands.HASH_COMMAND, commands.WINDOWS_HASH_COMMAND)}
           >
-            Hash the same fragment-free URL and check that its headers show Cache-Control: no-store.
+            Hash the decompressed body from the same fragment-free URL and check for Cache-Control:
+            no-store.
           </Step>
           <Step
             number={4}
@@ -210,17 +209,12 @@ export function VerifyScreen() {
         </ol>
         <div class="mt-4 space-y-3">
           <P>
-            A new release may take a short while to deploy; an older release that stays live is a
-            warning sign, even if its hashes match. The hash is over the decompressed response body,
-            so compressed delivery still matches.
+            A new release may briefly lag until deployed; an older version that stays live is a
+            warning sign even if its hashes match.
           </P>
           <P>
-            Before trusting a release, also confirm its full commit is on main under Go deeper.
-            Checking /index.html alone cannot detect a different document served on a share link.
-          </P>
-          <P>
-            If any hash differs, an older release stays live or verification fails, do not use the
-            site; report it to <Link href="mailto:security@brix.money">security@brix.money</Link>.
+            If anything differs or verification fails, do not use the site; report it to{' '}
+            <Link href="mailto:security@brix.money">security@brix.money</Link>.
           </P>
         </div>
       </section>
@@ -267,8 +261,11 @@ export function VerifyScreen() {
           </Deeper>
           <Deeper title="Check every served file" id="verify-files">
             <P>
-              This also covers the proof-of-work worker and static assets. Workers cannot carry SRI,
-              so this worker is outside the integrity chain; it receives no keys or secret content.
+              The release’s index.html pins the entry script and stylesheet with integrity hashes
+              the browser enforces; all code that handles secrets is bundled into that script.
+              Checking every file also covers the proof-of-work worker and static assets. Workers
+              cannot carry SRI, so this worker is outside the integrity chain; it receives no keys
+              or secret content.
             </P>
             <Code
               os={os}

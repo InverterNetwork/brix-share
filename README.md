@@ -76,14 +76,12 @@ url='https://share.brix.money/'
 curl -fsS --compressed "$url" | grep brix-share-version
 ```
 
-2. Confirm that the served version is [the latest release on GitHub](https://github.com/InverterNetwork/brix-share/releases/latest). Right after a new release, the site can lag for a short while until it is deployed. An older legitimate release still passes its hash checks; an older version that stays live is a warning sign. Open `https://github.com/InverterNetwork/brix-share/releases/tag/<version>` and read `/index.html` in its hash table, or download the manifest and read that entry:
+2. Confirm that the served version is [the latest release on GitHub](https://github.com/InverterNetwork/brix-share/releases/latest). Right after a new release, the site can lag for a short while until it is deployed. An older legitimate release still passes its hash checks; an older version that stays live is a warning sign. Download the served release's manifest from GitHub:
 
 ```sh
 # Replace vX.Y.Z with the served version, after checking the latest release on GitHub.
 version=vX.Y.Z
 curl -fL "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -o manifest.json
-# Optional, with jq:
-jq -r '.files["/index.html"]' manifest.json
 ```
 
 3. Confirm that the release's full commit SHA is on `main`. Open `https://github.com/InverterNetwork/brix-share/commit/<sha>` and check the listed branches, or use the commands below in a clone. A tag name or an attestation alone does not establish that the code went through review.
@@ -112,9 +110,8 @@ The attestation establishes where this manifest came from and detects replacemen
 
 ```sh
 # Hash the same exact $url set above, without its #fragment.
-curl -fsS --compressed "$url" | (
-  if command -v shasum >/dev/null; then shasum -a 256; else sha256sum; fi
-)
+curl -fsS --compressed "$url" | shasum -a 256
+# Linux without shasum: use sha256sum instead
 # Response headers must show Cache-Control: no-store:
 curl -fsSI --compressed "$url" | grep -i '^cache-control:'
 ```
@@ -129,7 +126,13 @@ Invoke-WebRequest $url -OutFile index.html
 Get-FileHash index.html -Algorithm SHA256
 ```
 
-Compare with the manifest's `/index.html` entry (hex case does not matter). Every path must return the same bytes. Equal hashes mean that response matches the release. This does not verify future loads, your browser or the server's access rules. Trust still depends on GitHub, the reviewed source and your own tools. If a hash differs, an older release stays live or verification fails, **do not use the site**; report it to `security@brix.money`.
+Read the manifest's `/index.html` entry and compare it with your result (hex case does not matter):
+
+```sh
+jq -r '.files["/index.html"]' manifest.json
+```
+
+Every path must return the same bytes. Equal hashes mean that response matches the release. This does not verify future loads, your browser or the server's access rules. Trust still depends on GitHub, the reviewed source and your own tools. If a hash differs, an older release stays live or verification fails, **do not use the site**; report it to `security@brix.money`.
 
 ### The copy your browser received
 
