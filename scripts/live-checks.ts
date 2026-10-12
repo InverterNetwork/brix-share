@@ -134,6 +134,23 @@ export async function checkDelivery(
   return failures;
 }
 
+/** Static routes on the default distribution domain must redirect before the SPA rewrite. */
+export async function checkCanonicalRedirect(
+  distributionBase: string,
+  canonicalBase: string,
+): Promise<string[]> {
+  const failures: string[] = [];
+  for (const path of ['/', `/s/${randomId()}`, `/m/${randomId()}`]) {
+    const { res } = await get(distributionBase, path);
+    const expected = new URL(path, canonicalBase).href;
+    if (res.status !== 301 || res.headers.get('location') !== expected)
+      failures.push(
+        `${path}: distribution domain must answer 301 to ${expected}, got ${res.status} and ${JSON.stringify(res.headers.get('location'))}`,
+      );
+  }
+  return failures;
+}
+
 /** Files bucket origin of a stage, derived exactly as the stack names the bucket. */
 export function stageFilesOrigin(stage: string, bucketSuffix: string, region: string): string {
   return filesBucketOrigin(filesBucketName(stage, bucketSuffix), region);

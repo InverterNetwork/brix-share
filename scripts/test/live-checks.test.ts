@@ -128,3 +128,33 @@ describe('checkDelivery', () => {
     expect(f[0]).toMatch(/^\/: CSP allows https:\/\/files-bucket/);
   });
 });
+
+describe('canonical redirects', () => {
+  it('checks the root and original share/manage paths without following redirects', async () => {
+    const { checkCanonicalRedirect } = await import('../live-checks.ts');
+    server = createServer((req, res) =>
+      res.writeHead(301, { location: `https://share.example.com${req.url}` }).end(),
+    );
+    await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
+    expect(
+      await checkCanonicalRedirect(
+        `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+        'https://share.example.com',
+      ),
+    ).toEqual([]);
+  });
+
+  it('fails on the wrong host, rewritten paths or a non-301 response', async () => {
+    const { checkCanonicalRedirect } = await import('../live-checks.ts');
+    server = createServer((_req, res) =>
+      res.writeHead(302, { location: 'https://other.example.com/index.html' }).end(),
+    );
+    await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
+    const failures = await checkCanonicalRedirect(
+      `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+      'https://share.example.com',
+    );
+    expect(failures).toHaveLength(3);
+    expect(failures.every((f) => f.includes('got 302'))).toBe(true);
+  });
+});

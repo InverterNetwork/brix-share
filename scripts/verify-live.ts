@@ -35,6 +35,7 @@ import {
 import { solvePow } from '../web/src/pow/solver.ts';
 import {
   checkDelivery,
+  checkCanonicalRedirect,
   filesOriginFromCsp,
   get,
   randomId,
@@ -52,7 +53,10 @@ if (!stage || !base) {
   process.exit(2);
 }
 
-const stages = readStageFile() as Record<string, { filesBucketSuffix: string; region: string }>;
+const stages = readStageFile() as Record<
+  string,
+  { filesBucketSuffix: string; region: string; customDomain?: boolean; domainName: string }
+>;
 if (!local && !stages[stage]) throw new Error(`unknown stage ${stage}`);
 
 const terms: string[] = [];
@@ -227,6 +231,33 @@ async function decrypts(
 }
 
 async function edgeChecks() {
+  const config = stages[stage!]!;
+  if (config.customDomain) {
+    const distributionDomain = execFileSync(
+      'aws',
+      [
+        'cloudformation',
+        'describe-stacks',
+        '--stack-name',
+        `BrixShare-${stage}`,
+        '--region',
+        config.region,
+        '--query',
+        "Stacks[0].Outputs[?OutputKey=='DistributionDomainName'].OutputValue | [0]",
+        '--output',
+        'text',
+      ],
+      { encoding: 'utf8' },
+    ).trim();
+    if (!/^[a-z0-9]+\.cloudfront\.net$/.test(distributionDomain))
+      throw new Error('missing or invalid DistributionDomainName stack output');
+    const redirectFailures = await checkCanonicalRedirect(
+      `https://${distributionDomain}`,
+      `https://${config.domainName}`,
+    );
+    check(redirectFailures.length === 0, 'distribution domain redirects to the canonical host');
+    failures.push(...redirectFailures);
+  }
   const wrongHash = await fetch(new URL(`/api/secrets/${randomId()}/consume`, base), {
     method: 'POST',
     headers: { 'user-agent': userAgent, 'x-amz-content-sha256': sha256Hex('not the body') },

@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { Match } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { RATE_LIMITS } from '../lib/waf.ts';
@@ -43,7 +44,7 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
         CorsRules: [
           {
             AllowedOrigins: stage.customDomain
-              ? [Match.objectLike({ 'Fn::Join': Match.anyValue() }), `https://${stage.domainName}`]
+              ? [`https://${stage.domainName}`]
               : [
                   Match.objectLike({
                     'Fn::Join': [
@@ -226,6 +227,36 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
         ],
       }),
     });
+  });
+
+  it('viewer function redirects alternate hosts before rewriting and leaves the smoke-test host usable', () => {
+    const code = resourcesOf(mainT, 'AWS::CloudFront::Function')[0]!.Properties!
+      .FunctionCode as string;
+    for (const host of [stage.domainName, 'distribution.cloudfront.net', 'other.example.com']) {
+      for (const uri of [
+        '/',
+        '/s/AAAAAAAAAAAAAAAAAAAAAA',
+        '/m/AAAAAAAAAAAAAAAAAAAAAA',
+        '/assets/app-hash.js',
+      ]) {
+        const request = { uri, headers: { host: { value: host } } };
+        const result = runInNewContext(`${code}; handler(event)`, {
+          event: { request },
+        }) as unknown;
+        if (stage.customDomain && host !== stage.domainName) {
+          expect(result).toEqual({
+            statusCode: 301,
+            statusDescription: 'Moved Permanently',
+            headers: { location: { value: `https://${stage.domainName}${uri}` } },
+          });
+        } else {
+          expect(result).toEqual({
+            ...request,
+            uri: uri.startsWith('/assets/') ? uri : '/index.html',
+          });
+        }
+      }
+    }
   });
 
   it('api origin request policy forwards only what the API reads', () => {

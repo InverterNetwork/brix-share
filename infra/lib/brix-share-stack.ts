@@ -49,8 +49,13 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const entry = (rel: string) => fileURLToPath(new URL(`../../${rel}`, import.meta.url));
 
 /** SPA routing: extensionless paths serve index.html. Only on the static behavior, never on /api. */
-const SPA_REWRITE = `function handler(event) {
+const SPA_REWRITE = (domainName: string | null) => `function handler(event) {
   var r = event.request;
+  var canonical = ${JSON.stringify(domainName)};
+  if (canonical && (!r.headers.host || r.headers.host.value.toLowerCase() !== canonical)) {
+    return { statusCode: 301, statusDescription: 'Moved Permanently',
+      headers: { location: { value: 'https://' + canonical + r.uri } } };
+  }
   var last = r.uri.substring(r.uri.lastIndexOf('/') + 1);
   if (last.indexOf('.') === -1) { r.uri = '/index.html'; }
   return r;
@@ -377,7 +382,9 @@ export class BrixShareStack extends Stack {
           {
             eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
             function: new cloudfront.Function(this, 'SpaRewrite', {
-              code: cloudfront.FunctionCode.fromInline(SPA_REWRITE),
+              code: cloudfront.FunctionCode.fromInline(
+                SPA_REWRITE(stage.customDomain ? stage.domainName : null),
+              ),
               runtime: cloudfront.FunctionRuntime.JS_2_0,
             }),
           },
@@ -459,10 +466,9 @@ export class BrixShareStack extends Stack {
 
     // Uploads and downloads go from the site straight to the files bucket.
     filesBucket.addCorsRule({
-      allowedOrigins: [
-        `https://${distribution.distributionDomainName}`,
-        ...(props.domain ? [`https://${stage.domainName}`] : []),
-      ],
+      allowedOrigins: stage.customDomain
+        ? [`https://${stage.domainName}`]
+        : [`https://${distribution.distributionDomainName}`],
       allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET],
       allowedHeaders: ['content-type'],
       maxAge: 300,
@@ -672,6 +678,7 @@ export class BrixShareStack extends Stack {
       });
     }
 
+    new CfnOutput(this, 'DistributionDomainName', { value: distribution.distributionDomainName });
     new CfnOutput(this, 'DistributionId', { value: distribution.distributionId });
     new CfnOutput(this, 'SiteUrl', {
       value: props.domain
