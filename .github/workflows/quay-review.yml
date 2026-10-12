@@ -1,0 +1,119 @@
+name: Quay review
+
+on:
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number
+        required: true
+        type: string
+      mode:
+        description: Verify changes or request a full fresh review
+        required: true
+        default: targeted
+        type: choice
+        options: [targeted, full]
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  request-quay-review:
+    name: Request Quay v2 review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request') ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/review')) ||
+      github.event_name == 'pull_request_target'
+    env:
+      QUAY_REVIEW_URL: ${{ secrets.QUAY_REVIEW_URL }}
+      QUAY_REVIEW_PR_TOKEN: ${{ secrets.QUAY_REVIEW_PR_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # No checkout: privileged events never execute code from the PR.
+      - name: Submit authenticated review intent
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          with open(os.environ['GITHUB_EVENT_PATH']) as source:
+              event = json.load(source)
+          repository = event['repository']['full_name']
+          event_name = os.environ['GITHUB_EVENT_NAME']
+          if event_name == 'issue_comment' and not re.fullmatch(
+              r'/review(?:\s+(full|verify))?', event['comment']['body'].strip(), re.IGNORECASE
+          ):
+              print('Not a review command; no review requested.')
+              raise SystemExit(0)
+          token = os.environ.get('QUAY_REVIEW_PR_TOKEN', '')
+          base = urllib.parse.urlsplit(os.environ.get('QUAY_REVIEW_URL', ''))
+          if not token or base.scheme != 'https' or not base.hostname or base.username:
+              raise SystemExit('Configure the HTTPS QUAY_REVIEW_URL and QUAY_REVIEW_PR_TOKEN secrets.')
+          endpoint = urllib.parse.urlunsplit((base.scheme, base.netloc, '/quay/v2/review-pr', '', ''))
+
+          def github(path):
+              request = urllib.request.Request('https://api.github.com/repos/' + repository + '/' + path,
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          if event_name == 'workflow_run':
+              run = event['workflow_run']
+              pulls = run['pull_requests']
+              if not pulls:
+                  pulls = github('commits/' + run['head_sha'] + '/pulls?per_page=100')
+              requests = [dict(kind='ci', repository=repository, pull_request=pr['number'],
+                  workflow_run_id=run['id'], head_sha=run['head_sha']) for pr in pulls]
+              if not requests:
+                  raise SystemExit('No PR associated with this CI revision; no review requested.')
+          elif event_name == 'workflow_dispatch':
+              number = event['inputs']['pull_request']
+              if not re.fullmatch(r'[1-9][0-9]*', number):
+                  raise SystemExit('pull_request must be a positive integer.')
+              requests = [dict(kind='manual', repository=repository, pull_request=int(number),
+                  workflow_run_id=int(os.environ['GITHUB_RUN_ID']), mode=event['inputs']['mode'])]
+          elif event_name == 'issue_comment':
+              requests = [dict(kind='comment', repository=repository, pull_request=event['issue']['number'],
+                  comment_id=event['comment']['id'])]
+          else:
+              requests = [dict(kind='closed', repository=repository, pull_request=event['pull_request']['number'])]
+
+          for payload in requests:
+              for attempt in range(4):
+                  request = urllib.request.Request(endpoint, data=json.dumps(payload).encode(), method='POST',
+                      headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+                  try:
+                      with urllib.request.urlopen(request, timeout=40) as response:
+                          result = json.load(response)
+                      print('Quay v2 request:', result.get('status', 'accepted'))
+                      break
+                  except urllib.error.HTTPError as error:
+                      if error.code == 422:
+                          print('PR request is no longer eligible; no review queued.')
+                          break
+                      if error.code not in (429, 500, 502, 503, 504) or attempt == 3:
+                          raise SystemExit('Quay v2 refused the request (HTTP ' + str(error.code) + ').')
+                  except (urllib.error.URLError, TimeoutError):
+                      if attempt == 3:
+                          raise SystemExit('Quay v2 could not be reached; rerun this workflow.')
+                  time.sleep(2 ** attempt)
+          PY
