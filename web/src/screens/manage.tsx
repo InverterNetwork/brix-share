@@ -166,7 +166,7 @@ export function ManageScreen({
     ['Created', formatDate(s.createdAt)],
   ];
   if (ended && s.endedAt) {
-    rows.push(['Ended', formatDateSeconds(s.endedAt)]);
+    rows.push(['Ended', formatDate(s.endedAt)]);
     rows.push(['Reason', REASON[s.endedReason ?? ''] ?? '']);
     rows.push(['Was set to expire', formatDate(s.expiresAt)]);
   } else {
