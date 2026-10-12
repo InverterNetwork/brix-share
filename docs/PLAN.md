@@ -301,7 +301,7 @@ IP addresses:
 - Repo `inverternetwork/brix-share`, pnpm workspace: `web/`, `api/`, `sweeper/`, `infra/` (CDK), `shared/` (envelope types, validation, test vectors shared by client and Lambdas).
 - Stages: only `prod` (eu-central-1, `share.brix.money`). The stack stays parameterized by stage.
 - CI: lint, typecheck, unit tests, Playwright, CDK synth, reproducible build check. No deploys from CI. Releases are `v*` tags on `main` with a published asset manifest; a human deploys a release with `scripts/deploy-infra.sh` and `scripts/deploy-web.ts` (see `docs/RUNBOOK.md`).
-- Runbook: flipping the circuit breaker, adjusting proof-of-work difficulty, full purge in an incident (`DeleteTable` + empty bucket + redeploy is the fastest complete redaction), alarm meanings, how to read CloudFront logs for an incident and who may.
+- Runbook: flipping the circuit breaker, adjusting proof-of-work difficulty, full purge in an incident (the table-preserving procedure in `docs/RUNBOOK.md`), alarm meanings, how to read CloudFront logs for an incident and who may.
 - Ownership: one named maintainer, quarterly dependency review, re-run the review on protocol version changes.
 
 ## 14. Testing requirements (acceptance criteria)
