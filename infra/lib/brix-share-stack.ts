@@ -29,6 +29,7 @@ import type { Construct } from 'constructs';
 import {
   DEFAULT_POW_DIFFICULTY,
   MANAGE_TOKEN_HEADER,
+  CONSUME_TOKEN_HEADER,
   PERMISSIONS_POLICY,
   HSTS_MAX_AGE_SEC,
   contentSecurityPolicy,
@@ -339,6 +340,7 @@ export class BrixShareStack extends Stack {
       comment: 'Brix Share API: only the headers the API reads',
       headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
         MANAGE_TOKEN_HEADER,
+        CONSUME_TOKEN_HEADER,
         'content-type',
         'CloudFront-Viewer-Country',
       ),

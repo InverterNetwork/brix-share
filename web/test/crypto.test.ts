@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import kat from '@brix-share/shared/vectors/kat-v1.json' with { type: 'json' };
 import {
   PayloadSchema,
+  hashConsumeToken,
   b64urlDecode,
   bytesToHex,
   hexToBytes,
@@ -13,6 +14,7 @@ import {
   checkEnvelope,
   deriveKDataBytes,
   deriveKey,
+  deriveConsumeToken,
   envelopeSalt,
   newId,
   newLinkKey,
@@ -192,5 +194,19 @@ describe('consistency and normalisation', () => {
       payload: { title: null, text: 'ws', files: [] },
     });
     expect((await openText(env, await deriveKey(kLink, ' orbit-cactus \n', salt))).text).toBe('ws');
+  });
+});
+
+describe('consume capability', () => {
+  it.each(kat.consume)('$name derives and hashes without a passphrase', async (v) => {
+    const token = await deriveConsumeToken(b64urlDecode(v.kLink));
+    expect(token).toBe(v.token);
+    expect(await hashConsumeToken(token)).toBe(v.hash);
+    expect(token).not.toBe(v.kLink);
+  });
+  it('rejects malformed keys and tokens', async () => {
+    await expect(deriveConsumeToken(new Uint8Array(31))).rejects.toThrow(ProtocolError);
+    for (const token of ['bad!', '', 'A'.repeat(42), 'A'.repeat(44)])
+      await expect(hashConsumeToken(token)).rejects.toThrow();
   });
 });

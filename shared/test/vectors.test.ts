@@ -2,11 +2,11 @@
  * Recomputes the v1 known-answer vectors with node:crypto, an implementation path independent of the
  * WebCrypto generator, plus external anchors (RFC 5869, RFC 7914, GCM spec test case 16) for the primitives.
  */
-import { createCipheriv, createDecipheriv, hkdfSync, pbkdf2Sync } from 'node:crypto';
+import { createHash, createCipheriv, createDecipheriv, hkdfSync, pbkdf2Sync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import kat from '../vectors/kat-v1.json' with { type: 'json' };
 import { fileAad, textAad } from '../src/aad.ts';
-import { HKDF_INFO_PASSPHRASE, PBKDF2_ITERATIONS } from '../src/constants.ts';
+import { HKDF_INFO_CONSUME, HKDF_INFO_PASSPHRASE, PBKDF2_ITERATIONS } from '../src/constants.ts';
 import { EnvelopeSchema } from '../src/schema.ts';
 
 const hex = (s: string) => Buffer.from(s, 'hex');
@@ -169,5 +169,15 @@ describe('kat-v1 negative vectors', () => {
         Buffer.from(fileAad(base.id, n.fileId)),
       ),
     ).toThrow();
+  });
+});
+
+describe('kat-v1 consume vectors', () => {
+  it.each(kat.consume)('$name: independent HKDF and hash', (v) => {
+    const token = Buffer.from(
+      hkdfSync('sha256', b64(v.kLink), Buffer.alloc(0), HKDF_INFO_CONSUME, 32),
+    );
+    expect(token.toString('base64url')).toBe(v.token);
+    expect(createHash('sha256').update(token).digest('hex')).toBe(v.hash);
   });
 });

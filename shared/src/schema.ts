@@ -69,6 +69,7 @@ export const CreateRequestSchema = z.strictObject({
   envelope: EnvelopeSchema,
   policy: PolicyInputSchema,
   manageTokenHash: z.string().regex(/^[0-9a-f]{64}$/),
+  consumeTokenHash: z.string().regex(/^[0-9a-f]{64}$/),
   pow: PowSolutionSchema,
   files: z.array(FileDeclSchema).max(MAX_FILES),
 });

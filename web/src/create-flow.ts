@@ -5,12 +5,14 @@ import {
   MAX_TOTAL_FILE_BYTES,
   b64urlEncode,
   hashManageToken,
+  hashConsumeToken,
   type CreateResponse,
   type Payload,
 } from '@brix-share/shared';
 import { createSecret, finalizeSecret, uploadFile, type CreateHooks } from './api.ts';
 import {
   deriveKey,
+  deriveConsumeToken,
   newId,
   newLinkKey,
   newManageToken,
@@ -134,12 +136,14 @@ export async function createFlow(
     payload: { title: input.title, text: input.text, files: attachments.map((a) => a.meta) },
   });
   const manageTokenHash = await hashManageToken(manageToken);
+  const consumeTokenHash = await hashConsumeToken(await deriveConsumeToken(kLink));
 
   const response = await createSecret(
     (now) => ({
       envelope,
       policy: policyOf(input.form, now),
       manageTokenHash,
+      consumeTokenHash,
       files: attachments.map((a) => ({ fileId: a.meta.fileId, size: a.meta.size })),
     }),
     hooks,

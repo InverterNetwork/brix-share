@@ -5,6 +5,7 @@
 import kat from '@brix-share/shared/vectors/kat-v1.json' with { type: 'json' };
 import {
   PayloadSchema,
+  hashConsumeToken,
   b64urlDecode,
   bytesToHex,
   hexToBytes,
@@ -15,6 +16,7 @@ import {
   checkEnvelope,
   deriveKDataBytes,
   deriveKey,
+  deriveConsumeToken,
   envelopeSalt,
   openFile,
   openText,
@@ -119,6 +121,12 @@ async function run() {
       } catch (e) {
         return e instanceof DecryptError;
       }
+    });
+  }
+  for (const v of kat.consume) {
+    await check(`consume:${v.name}`, async () => {
+      const token = await deriveConsumeToken(b64urlDecode(v.kLink));
+      return token === v.token && (await hashConsumeToken(token)) === v.hash;
     });
   }
   window.__kat = { ok: results.every((r) => r.ok), results };

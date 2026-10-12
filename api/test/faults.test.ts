@@ -71,7 +71,12 @@ describe('fault injection', () => {
       },
       { step: 'initialize', name: 'expireBeforeWrite', override: true },
     );
-    const res = await api.repo.consume(id, () => T0, 'DE');
+    const res = await api.repo.consume(
+      id,
+      () => T0,
+      'DE',
+      (await api.repo.get(id))!.consumeTokenHash,
+    );
     expect(fired).toBe(true);
     expect(res.kind).toBe('not_found');
     const item = await api.repo.get(id);

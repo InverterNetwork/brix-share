@@ -276,5 +276,19 @@
       "fileId": "oKGio6SlpqeoqaqrrK2urw",
       "storedHex": "c0c1c2c3c4c5c6c7c8c9cacb31bc67aad4a00ae043265ec156a217892bac3bb40007c4fc5ab10f7911c699c7cf1194439072b4bf63c3cdf9bc9a854445384ef6d92cf72ec604b22600304e12a5bc7a506845194ea23e4d8ee3e030861780a0fcda7cb771c6877af2830b7c2a"
     }
+  ],
+  "consume": [
+    {
+      "name": "consume-text-no-passphrase",
+      "kLink": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
+      "token": "jN5z5wlYU8nDZfUviapm5KeB9A_PvcL1pk3jJuK_fvQ",
+      "hash": "69f51543d37bc992f8ed8ef7a12c997c4901789270a69f19964e17a625ba6a5b"
+    },
+    {
+      "name": "consume-text-passphrase",
+      "kLink": "MDEyMzQ1Njc4OTo7PD0-P0BBQkNERUZHSElKS0xNTk8",
+      "token": "v0zFQgEreEVUFACOnsPfMIOiQ2qMX0i41prlPVuiGEw",
+      "hash": "eec23107f287a9669226d809cd8fd0f17ec6c743bb56924b0f801b69e16c00a0"
+    }
   ]
 }

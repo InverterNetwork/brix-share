@@ -233,7 +233,12 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
       OriginRequestPolicyConfig: Match.objectLike({
         HeadersConfig: {
           HeaderBehavior: 'whitelist',
-          Headers: ['x-manage-token', 'content-type', 'CloudFront-Viewer-Country'],
+          Headers: [
+            'x-manage-token',
+            'x-consume-token',
+            'content-type',
+            'CloudFront-Viewer-Country',
+          ],
         },
         QueryStringsConfig: { QueryStringBehavior: 'none' },
         CookiesConfig: { CookieBehavior: 'none' },

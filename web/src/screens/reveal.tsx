@@ -16,6 +16,7 @@ import {
   ProtocolError,
   checkEnvelope,
   deriveKey,
+  deriveConsumeToken,
   envelopeSalt,
   openText,
 } from '../crypto/envelope.ts';
@@ -116,7 +117,7 @@ export function RevealScreen({
   const check = async () => {
     setState({ kind: 'checking' });
     try {
-      const a = await getAvailability(id);
+      const a = await getAvailability(id, await deriveConsumeToken(keyBytes.current!));
       setState(
         a.kind === 'not_found'
           ? { kind: 'gone' }
@@ -160,7 +161,7 @@ export function RevealScreen({
     setState({ kind: 'loading' });
     let outcome;
     try {
-      outcome = await consumeSecret(id);
+      outcome = await consumeSecret(id, await deriveConsumeToken(keyBytes.current!));
     } catch (e) {
       // The request may have reached the server and counted (dropped connection, or a server error after an
       // ambiguous write). Never retry, not even on a click.

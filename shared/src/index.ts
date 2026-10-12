@@ -6,5 +6,6 @@ export * from './validate.ts';
 export * from './errors.ts';
 export * from './headers.ts';
 export * from './manage.ts';
+export * from './consume.ts';
 export * from './pow.ts';
 export * from './passphrase.ts';

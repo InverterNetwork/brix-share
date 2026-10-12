@@ -5,6 +5,7 @@
 import {
   EnvelopeSchema,
   HKDF_INFO_PASSPHRASE,
+  HKDF_INFO_CONSUME,
   ID_BYTES,
   IV_BYTES,
   KEY_BYTES,
@@ -50,6 +51,18 @@ export class ProtocolError extends Error {
     super(message);
     this.name = 'ProtocolError';
   }
+}
+
+/** Link capability, available before any passphrase prompt; never grants decryption or management. */
+export async function deriveConsumeToken(kLink: Uint8Array<ArrayBuffer>): Promise<string> {
+  if (kLink.length !== KEY_BYTES) throw new ProtocolError('link key must be 32 bytes');
+  const ikm = await subtle().importKey('raw', kLink, 'HKDF', false, ['deriveBits']);
+  const token = await subtle().deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: enc.encode(HKDF_INFO_CONSUME) },
+    ikm,
+    256,
+  );
+  return b64urlEncode(new Uint8Array(token));
 }
 
 /** Raw K_data bytes. Exposed for the known-answer tests; app code uses `deriveKey`. */

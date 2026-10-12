@@ -53,7 +53,7 @@ Protects against:
 - Database, backup or log leak: the server only holds ciphertext, IVs, salts and policy metadata.
 - Backend or infrastructure compromise that cannot alter what the browser loads (Lambda, DynamoDB, S3 data plane, IAM, cloud provider staff with data-plane access): ciphertext only.
 - Link leakage after consumption: a burn-after-reading link is dead after the first retrieval. A leaked multi-view link is covered by the optional passphrase.
-- Link preview fetchers: the GET for the page consumes nothing. Retrieval requires an explicit click that issues a POST. Previewers fetch and sometimes render, but do not click buttons or issue POSTs. Residual: a scanner that executes JavaScript and synthesizes clicks; the manage page shows retrieval timestamps and countries so the sender can spot an unexpected consumption and recreate the secret. (Security review: more precisely, anyone who knows the link's path can send the retrieval request without the key, so path-only observers such as chat or mail logs can burn a retrieval; they cannot read it. A consume token derived from `K_link` would close this in a protocol v2, see DECISIONS.md.)
+- Link preview fetchers: the GET for the page consumes nothing. Retrieval requires an explicit click that issues a POST. Previewers fetch and sometimes render, but do not click buttons or issue POSTs. Residual: a scanner that executes JavaScript and synthesizes clicks; the manage page shows retrieval timestamps and countries so the sender can spot an unexpected consumption and recreate the secret. Availability and retrieval requests require a consume token derived from the link key, so path-only observers cannot poll availability or burn retrievals.
 - Guessing: 128-bit random IDs, 256-bit random keys, 256-bit random manage tokens.
 
 Does not protect against (stated in the docs and the about page):
@@ -91,12 +91,16 @@ All client-side, WebCrypto only. No crypto libraries in the bundle. Protocol ver
 Identifiers and keys (all from `crypto.getRandomValues`):
 - `id`: 16 random bytes, base64url (22 chars). Client-chosen, server accepts only if unused (conditional put). Independent of the key.
 - `K_link`: 32 random bytes. Carried only in the share URL fragment, base64url (43 chars).
+- `T_consume`: 32 bytes derived from `K_link` (below); server stores `SHA-256(T_consume)` as hex. Authorizes availability and retrieval, independently of the passphrase.
 - `T_manage`: 32 random bytes. Carried only in the manage URL fragment. Server stores `SHA-256(T_manage)` as hex.
 - `salt`: 16 random bytes, present only if a passphrase is used.
 - One fresh 12-byte IV per encryption call (text envelope, each file). Each IV is used once under `K_data`.
 
 Key derivation:
 ```
+Always:
+  T_consume = HKDF-SHA256(IKM = K_link, salt = empty, info = "brix-share/v1/consume", 32 bytes)
+
 Without passphrase:
   K_data = K_link
 
@@ -143,7 +147,7 @@ All under `/api`, JSON, `Cache-Control: no-store`, same-origin only (no CORS). R
 - returns `{ challenge, difficulty, expiresAt }`. `challenge` = HMAC-signed random value with timestamp, valid 10 minutes. `difficulty` from SSM (default 18 leading zero bits, roughly 0.3 to 1 s in a browser).
 
 `POST /api/secrets`
-- body: `{ envelope, policy: { maxViews: number | null, expiresAt: ISO-8601, availableFrom: ISO-8601 | null }, manageTokenHash: hex, pow: { challenge, nonce }, files: [{ fileId, size }] }`
+- body: `{ envelope, policy: { maxViews: number | null, expiresAt: ISO-8601, availableFrom: ISO-8601 | null }, manageTokenHash: hex, consumeTokenHash: hex, pow: { challenge, nonce }, files: [{ fileId, size }] }`
 - validation: `v == "v1"`; id format; `ct` <= 96 KB encoded; `iv` 12 bytes; `salt` 16 bytes or null; `maxViews` null or 1..100; `expiresAt` in (now + 5 min, now + 30 d]; `availableFrom` null or in [now, expiresAt - 5 min); hash 64 hex; pow valid and unused (challenge replay blocked by a 10-minute conditional put of the challenge hash into the table); files 0..10, total size <= 25 MB, `fileIds` in envelope match.
 - `createEnabled == false` → 503 with a friendly message.
 - conditional put on `attribute_not_exists(id)`; 409 on collision (client regenerates).
@@ -153,7 +157,7 @@ All under `/api`, JSON, `Cache-Control: no-store`, same-origin only (no CORS). R
 - Only for secrets with files. Server HEADs each object, checks sizes, sets `status: "ready"`. Until then consume returns 404. Pending items older than 1 hour are cleaned by the sweeper.
 
 `POST /api/secrets/{id}/consume`
-- no body, no auth. The only call that counts as a retrieval.
+- no body; requires `x-consume-token: base64url(T_consume)`. The only call that counts as a retrieval.
 - server: conditional update or delete (section 9). Success returns `{ envelope, policy: { viewsRemaining, expiresAt }, downloads: [{ fileId, url }] }` with presigned S3 GET URLs valid 2 minutes. The delete-token hash and internal attributes are never returned.
 - `availableFrom > now` → 425 Too Early with `{ availableFrom }`. Everything else that is not retrievable → 404 (unknown, consumed, expired, deleted, pending), indistinguishable to the caller.
 - The client never auto-retries. A committed consume with a lost response burns the retrieval; the UI explains this and tells the recipient to ask for a new link.
@@ -165,10 +169,10 @@ All under `/api`, JSON, `Cache-Control: no-store`, same-origin only (no CORS). R
 `DELETE /api/secrets/{id}` with header `Authorization: Bearer <T_manage>` (implemented as `x-manage-token`, see DECISIONS.md)
 - conditional delete on `deleteTokenHash == SHA-256(token)`; also deletes `<id>/*` from S3. 204 on success, 404 otherwise.
 
-Tokens travel in the Authorization header, never in the query string. CloudFront and Lambda logging must exclude that header. (Implementation: the token header is `x-manage-token` because CloudFront OAC owns `Authorization`; see DECISIONS.md.)
+Tokens travel only in `x-manage-token` and `x-consume-token` headers, never in the query string and never logged. CloudFront OAC owns `Authorization`. Both availability and consume hash the decoded consume token with the shared helper and compare using `timingSafeEqual`; a missing, malformed or wrong token returns the same 404 as a missing secret.
 
 `GET /api/secrets/{id}` (added in v1.1, see DECISIONS.md 2026-10-10)
-- no auth, counts nothing. 200 `{ availableFrom }` (null once released) if the secret can be opened now or later; otherwise the same 404 as consume. Never returns the envelope. The share page calls it on load.
+- requires `x-consume-token: base64url(T_consume)`, counts nothing. 200 `{ availableFrom }` (null once released) if the secret can be opened now or later; otherwise the same 404 as consume. Never returns the envelope. The share page calls it on load.
 
 `GET /api/health` returns 200 with no details.
 
@@ -194,7 +198,8 @@ Secret item:
 | expiresAt | N | epoch seconds; the policy expiry (live items and tombstones) |
 | purgeAt | N | epoch seconds; DynamoDB TTL attribute. Live items: policy expiry + 30 d (TTL never removes a live item before the sweeper tombstones it). Tombstones: `endedAt + 30 d` (implementation correction 2026-10-09, see DECISIONS.md) |
 | createdAt | N | epoch seconds |
-| deleteTokenHash | S | hex SHA-256 |
+| deleteTokenHash | S | hex SHA-256 of the manage token |
+| consumeTokenHash | S | hex SHA-256 of the consume token; required |
 | fileIds | L | list of strings, may be empty |
 | sweepPart, sweepAt | S, N | sparse GSI keys: `live` + expiry (or pending cleanup time) for live items; `files` + `endedAt + 5 min` for ended items whose objects are due; absent when nothing is left to do (replaces `hasFiles`) |
 
@@ -205,9 +210,9 @@ No IP addresses anywhere in the table (section 12). `country` comes from the `Cl
 ## 9. Access semantics
 
 9.1 Consume on `POST /api/secrets/{id}/consume`, `now` server-side:
-1. Read the item. Missing, `status != ready`, or `expiresAt <= now` → 404. `availableFrom > now` → 425.
-2. If `viewsRemaining == 1`: `UpdateItem` that turns the item into a tombstone in one write: `REMOVE envelope SET status = :ended, endedAt = :now, endedReason = :consumed, purgeAt = :now + 30d, viewsRemaining = :zero, retrievals = list_append(...)` (plus the sweep index keys, section 8), with condition `attribute_exists(pk) AND status = :ready AND expiresAt > :now AND (attribute_not_exists(availableFrom) OR availableFrom <= :now) AND viewsRemaining = :one`, `ReturnValues ALL_OLD`. Return the envelope from the old item. S3 deletion of `<id>/*` follows after the presigned GET window: the tombstone puts the item in the `files` partition of the sweep index at `endedAt + 5 min`, and the sweeper deletes the objects then.
-3. Else: `UpdateItem` setting `viewsRemaining = viewsRemaining - 1` (when not null) and appending `{ at, country }` to `retrievals`, condition `attribute_exists(pk) AND status = :ready AND expiresAt > :now AND (attribute_not_exists(availableFrom) OR availableFrom <= :now) AND (attribute_not_exists(viewsRemaining) OR viewsRemaining > :one)`, `ReturnValues ALL_NEW`.
+1. Read the item and verify the consume token before disclosing availability or writing. Missing hash or invalid token → 404. Missing, `status != ready`, or `expiresAt <= now` → 404. `availableFrom > now` → 425.
+2. If `viewsRemaining == 1`: `UpdateItem` that turns the item into a tombstone in one write: `REMOVE envelope SET status = :ended, endedAt = :now, endedReason = :consumed, purgeAt = :now + 30d, viewsRemaining = :zero, retrievals = list_append(...)` (plus the sweep index keys, section 8), with condition `attribute_exists(pk) AND status = :ready AND expiresAt > :now AND (attribute_not_exists(availableFrom) OR availableFrom <= :now) AND consumeTokenHash = :h AND viewsRemaining = :one`, `ReturnValues ALL_OLD`. Return the envelope from the old item. S3 deletion of `<id>/*` follows after the presigned GET window: the tombstone puts the item in the `files` partition of the sweep index at `endedAt + 5 min`, and the sweeper deletes the objects then.
+3. Else: `UpdateItem` setting `viewsRemaining = viewsRemaining - 1` (when not null) and appending `{ at, country }` to `retrievals`, condition `attribute_exists(pk) AND status = :ready AND expiresAt > :now AND (attribute_not_exists(availableFrom) OR availableFrom <= :now) AND consumeTokenHash = :h AND (attribute_not_exists(viewsRemaining) OR viewsRemaining > :one)`, `ReturnValues ALL_NEW`.
 4. On `ConditionalCheckFailedException`, re-read once and take the other branch if applicable; otherwise 404. Two concurrent consumes of a one-time secret: exactly one succeeds.
 5. Expiry and availability are enforced in the condition, not by TTL. TTL is cleanup only (DynamoDB deletes within about 48 hours).
 
@@ -266,7 +271,7 @@ Delivery integrity (reduces, does not eliminate, the section 4 residual risk):
 - Dependencies: minimal runtime deps, pnpm with the existing 7-day cooldown, `pnpm.onlyBuiltDependencies` allowlist, lockfile review on every bump, Renovate.
 
 Logging and data handling:
-- No request bodies, Authorization headers, envelopes or presigned URLs in any log, metric, trace, WAF sample or error reporter. WAF sampled requests off for `/api/*`.
+- No request bodies, Authorization, x-manage-token or x-consume-token headers, envelopes or presigned URLs in any log, metric, trace, WAF sample or error reporter. WAF sampled requests off for `/api/*`.
 - CloudFront standard logs ON, retained 30 days in a restricted bucket, as security logging (section 12). Query strings are never used by the app; fragments never reach the server.
 - S3 server access logs off (presigned URLs would otherwise be logged); use CloudTrail data events only if an incident requires it.
 - IAM: `api` role limited to the one table, the files bucket prefix operations it needs, SSM read; `sweeper` role limited to GSI query, delete and S3 list/delete. No human role with `dynamodb:Scan` or `s3:GetObject` on the files bucket in daily use.

@@ -1,6 +1,9 @@
 import { timingSafeEqual } from 'node:crypto';
 import {
   MANAGE_TOKEN_BYTES,
+  KEY_BYTES,
+  CONSUME_TOKEN_HEADER,
+  hashConsumeToken,
   MANAGE_TOKEN_HEADER,
   hashManageToken,
   isB64urlOfLength,
@@ -12,6 +15,12 @@ export async function manageTokenHash(event: FunctionUrlEvent): Promise<string |
   const token = header(event, MANAGE_TOKEN_HEADER);
   if (!token || !isB64urlOfLength(token, MANAGE_TOKEN_BYTES)) return undefined;
   return hashManageToken(token);
+}
+
+export async function consumeTokenHash(event: FunctionUrlEvent): Promise<string | undefined> {
+  const token = header(event, CONSUME_TOKEN_HEADER);
+  if (!token || !isB64urlOfLength(token, KEY_BYTES)) return undefined;
+  return hashConsumeToken(token);
 }
 
 export function hashesEqual(a: string, b: string): boolean {

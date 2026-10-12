@@ -5,8 +5,8 @@ test('crypto module passes every known-answer vector in this engine', async ({ p
   await page.waitForFunction(() => window.__kat !== undefined, undefined, { timeout: 45_000 });
   const kat = await page.evaluate(() => window.__kat!);
   expect(kat.results.filter((r) => !r.ok)).toEqual([]);
-  // 6 text, 2 file, 8 negative text and 2 negative file vectors.
-  expect(kat.results.length).toBe(18);
+  // Text, file, negative and consume-capability vectors.
+  expect(kat.results.length).toBe(20);
   expect(kat.ok).toBe(true);
 });
 

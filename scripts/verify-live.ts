@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import {
   b64urlEncode,
   hashManageToken,
+  hashConsumeToken,
   secToIso,
   type ConsumeResponse,
   type Envelope,
@@ -20,6 +21,7 @@ import {
 import {
   checkEnvelope,
   deriveKey,
+  deriveConsumeToken,
   envelopeSalt,
   newId,
   newLinkKey,
@@ -93,9 +95,12 @@ interface Made {
   id: string;
   kLink: Uint8Array<ArrayBuffer>;
   token: string;
+  consumeToken: string;
   passphrase: string | null;
   envelope: Envelope;
 }
+
+const consumeTokens = new Map<string, string>();
 
 async function create(opts: {
   maxViews: number | null;
@@ -106,6 +111,8 @@ async function create(opts: {
 }): Promise<Made> {
   const id = newId();
   const kLink = newLinkKey();
+  const consumeToken = await deriveConsumeToken(kLink);
+  consumeTokens.set(id, consumeToken);
   const salt = opts.passphrase ? newSalt() : null;
   const token = newManageToken();
   const key = await deriveKey(kLink, opts.passphrase ?? null, salt);
@@ -147,12 +154,15 @@ async function create(opts: {
       availableFrom: opts.availableIn ? secToIso(now + opts.availableIn) : null,
     },
     manageTokenHash: await hashManageToken(token),
+    consumeTokenHash: await hashConsumeToken(consumeToken),
     pow: { challenge, nonce },
     files: attachments.map((a) => ({ fileId: a.fileId, size: a.bytes.length })),
   });
   terms.push(
     id,
     token,
+    consumeToken,
+    await hashConsumeToken(consumeToken),
     b64urlEncode(kLink),
     envelope.ct.slice(0, 40),
     await hashManageToken(token),
@@ -195,10 +205,13 @@ async function create(opts: {
     });
     check(fin.status === 200, 'finalize releases the secret');
   }
-  return { id, kLink, token, passphrase: opts.passphrase ?? null, envelope };
+  return { id, kLink, token, consumeToken, passphrase: opts.passphrase ?? null, envelope };
 }
 
-const consume = (id: string) => api('POST', `/api/secrets/${id}/consume`);
+const consume = (id: string) =>
+  api('POST', `/api/secrets/${id}/consume`, undefined, {
+    'x-consume-token': consumeTokens.get(id)!,
+  });
 const status = (m: Made) =>
   api('GET', `/api/secrets/${m.id}/status`, undefined, { 'x-manage-token': m.token });
 
@@ -270,7 +283,17 @@ async function main() {
   const preview = await get(base!, `/s/${once.id}`);
   check(preview.res.status === 200, 'share page loads without the fragment');
   // What the share page asks on load: availability, which must not count either.
-  const avail = await api('GET', `/api/secrets/${once.id}`);
+  for (const path of [`/api/secrets/${once.id}`, `/api/secrets/${once.id}/consume`]) {
+    const method = path.endsWith('/consume') ? 'POST' : 'GET';
+    check((await api(method, path)).status === 404, `${method}: missing consume token is 404`);
+    check(
+      (await api(method, path, undefined, { 'x-consume-token': newManageToken() })).status === 404,
+      `${method}: wrong consume token is 404`,
+    );
+  }
+  const avail = await api('GET', `/api/secrets/${once.id}`, undefined, {
+    'x-consume-token': once.consumeToken,
+  });
   check(
     avail.status === 200 && avail.json?.availableFrom === null,
     'availability check: 200, available now',
@@ -286,7 +309,11 @@ async function main() {
   );
   check((await consume(once.id)).status === 404, 'one-time secret: second retrieval is 404');
   check(
-    (await api('GET', `/api/secrets/${once.id}`)).status === 404,
+    (
+      await api('GET', `/api/secrets/${once.id}`, undefined, {
+        'x-consume-token': once.consumeToken,
+      })
+    ).status === 404,
     'availability check: 404 once used up',
   );
   const s1 = await status(once);
@@ -303,6 +330,7 @@ async function main() {
   // The country comes from CloudFront; a header sent by the client must not override it.
   const spoof = await api('POST', `/api/secrets/${three.id}/consume`, undefined, {
     'cloudfront-viewer-country': 'ZZ',
+    'x-consume-token': three.consumeToken,
   });
   const afterSpoof = await status(three);
   const countries = ((afterSpoof.json?.retrievals as { country: string }[] | undefined) ?? []).map(

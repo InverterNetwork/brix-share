@@ -26,7 +26,7 @@ Node 22 via fnm (`.nvmrc`), pnpm via corepack.
 
 - No crypto libraries. Browser: WebCrypto only. Server: `node:crypto` for hashing and HMAC only.
 - Dependencies: only the approved list in `CONTRIBUTING.md`, exact versions, pnpm with the 7-day `minimumReleaseAge`. Anything else needs maintainer approval first. Build scripts are allowlisted in `pnpm-workspace.yaml` (`allowBuilds`).
-- Never log request bodies, manage tokens, envelopes, ciphertext or presigned URLs. Never put IP addresses in the table.
+- Never log request bodies, manage or consume tokens, envelopes, ciphertext or presigned URLs. Never put IP addresses in the table.
 - Existing vectors in `shared/vectors/kat-v1.json` are frozen for protocol v1 (new cases may be added; changing an existing one means a new protocol version). Fixed keys and IVs exist only in `shared/scripts/gen-vectors.ts`; real code always uses `crypto.getRandomValues`.
-- The manage token travels in the `x-manage-token` header, never in a URL query string (`Authorization` is taken by CloudFront OAC signing).
+- The manage token travels in the `x-manage-token` header and the consume token in `x-consume-token`, never in a URL query string (`Authorization` is taken by CloudFront OAC signing).
 - Imports use explicit `.ts` extensions (Node type stripping runs the CDK app and scripts directly).

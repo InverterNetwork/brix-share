@@ -2,6 +2,9 @@
 
 export const PROTOCOL_VERSION = 'v1';
 export const AAD_PREFIX = 'brix-share/v1';
+export const HKDF_INFO_CONSUME = 'brix-share/v1/consume';
+export const CONSUME_TOKEN_HEADER = 'x-consume-token';
+
 export const HKDF_INFO_PASSPHRASE = 'brix-share/v1/passphrase';
 export const PBKDF2_ITERATIONS = 600_000;
 
