@@ -87,6 +87,8 @@ export async function checkDelivery(
     const { res, body } = path === '/' ? root : await get(base, path);
     if (res.status !== 200) failures.push(`${path}: status ${res.status}`);
     checkHeaders(failures, path, res, filesOrigin);
+    if (res.headers.has('age'))
+      failures.push(`${path}: Age header present (${res.headers.get('age')})`);
     if (res.headers.get('cache-control') !== 'no-store')
       failures.push(`${path}: cache-control ${res.headers.get('cache-control')}`);
     if (res.headers.get('content-type') !== contentType('/index.html'))

@@ -259,6 +259,32 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
     }
   });
 
+  it('static cache policy honors no-store while retaining asset caching and compression', () => {
+    mainT.hasResourceProperties('AWS::CloudFront::CachePolicy', {
+      CachePolicyConfig: Match.objectLike({
+        MinTTL: 0,
+        DefaultTTL: 86400,
+        MaxTTL: 31536000,
+        ParametersInCacheKeyAndForwardedToOrigin: {
+          EnableAcceptEncodingGzip: true,
+          EnableAcceptEncodingBrotli: true,
+          CookiesConfig: { CookieBehavior: 'none' },
+          HeadersConfig: { HeaderBehavior: 'none' },
+          QueryStringsConfig: { QueryStringBehavior: 'none' },
+        },
+      }),
+    });
+    const resources = mainT.toJSON().Resources as Record<string, { Type: string }>;
+    const id = Object.entries(resources).find(
+      ([, r]) => r.Type === 'AWS::CloudFront::CachePolicy',
+    )![0];
+    mainT.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        DefaultCacheBehavior: Match.objectLike({ CachePolicyId: { Ref: id } }),
+      }),
+    });
+  });
+
   it('api origin request policy forwards only what the API reads', () => {
     mainT.hasResourceProperties('AWS::CloudFront::OriginRequestPolicy', {
       OriginRequestPolicyConfig: Match.objectLike({

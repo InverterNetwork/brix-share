@@ -20,6 +20,7 @@ interface Tamper {
   spaIndex?: string;
   dropHeader?: string;
   cache?: string;
+  age?: string;
 }
 
 let server: Server | undefined;
@@ -41,6 +42,7 @@ async function site(t: Tamper = {}): Promise<string> {
     res.writeHead(200, {
       ...headers,
       'content-type': contentType(file),
+      ...(t.age === undefined ? {} : { age: t.age }),
       'cache-control': t.cache && file === '/index.html' ? t.cache : cacheControl(file),
     });
     res.end(body);
@@ -97,6 +99,13 @@ describe('checkDelivery', () => {
       ORIGIN,
     );
     expect(f).toContain('index.html differs between /, /index.html and SPA paths');
+  });
+
+  it.each(['0', '1'])('rejects Age=%s on no-store documents', async (age) => {
+    const failures = await checkDelivery(await site({ age }), MANIFEST, ORIGIN);
+    expect(failures).toContain(`/: Age header present (${age})`);
+    expect(failures).toContain(`/index.html: Age header present (${age})`);
+    expect(failures.some((f) => /^\/s\/[^:]+: Age header present/.test(f))).toBe(true);
   });
 
   it('catches weakened headers and caching', async () => {

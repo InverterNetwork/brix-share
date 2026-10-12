@@ -353,6 +353,18 @@ export class BrixShareStack extends Stack {
       cookieBehavior: cloudfront.OriginRequestCookieBehavior.none(),
     });
 
+    // Honor origin no-store while retaining the managed policy's asset TTLs and compression.
+    const staticCache = new cloudfront.CachePolicy(this, 'StaticCache', {
+      minTtl: Duration.seconds(0),
+      defaultTtl: Duration.days(1),
+      maxTtl: Duration.days(365),
+      enableAcceptEncodingGzip: true,
+      enableAcceptEncodingBrotli: true,
+      cookieBehavior: cloudfront.CacheCookieBehavior.none(),
+      queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
+      headerBehavior: cloudfront.CacheHeaderBehavior.none(),
+    });
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       comment: `Brix Share ${stage.name}`,
       ...(props.domain
@@ -375,7 +387,7 @@ export class BrixShareStack extends Stack {
         origin: origins.S3BucketOrigin.withOriginAccessControl(staticBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        cachePolicy: staticCache,
         responseHeadersPolicy: headersPolicy,
         compress: true,
         functionAssociations: [
