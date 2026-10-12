@@ -261,6 +261,7 @@ Delivery integrity (reduces, does not eliminate, the section 4 residual risk):
 - Reproducible build (pinned lockfile, pinned Node via `.nvmrc`, deterministic Vite output), release tags, SHA-256 of built assets published on the release page (implemented: a GitHub release per `v*` tag).
 - Frontend deploy via a dedicated CI role that can only write to the static bucket and invalidate CloudFront; API deploy via a separate role. Bucket policy denies `s3:PutObject` from any principal other than that role. No human write access in daily use. (Implemented differently: deploys are manual and there are no CI deploy roles; a human admin assumes the dedicated web deploy role, the only principal the static bucket accepts writes from. See DECISIONS.md 2026-10-09.)
 - SRI attributes on all script and style tags.
+- Build version and commit in HTML metadata and the footer; `/verify` and the canonical README explain independent hash checks against the GitHub release manifest, signed with GitHub artifact attestations. Reproducible builds remain the root of trust; this adds detection, not protection against all targeted delivery.
 - External change monitor outside the AWS account (for example a GitHub Actions schedule): fetches `index.html` and the asset manifest hourly, alerts to Slack when hashes differ from the latest release.
 - Dependencies: minimal runtime deps, pnpm with the existing 7-day cooldown, `pnpm.onlyBuiltDependencies` allowlist, lockfile review on every bump, Renovate.
 

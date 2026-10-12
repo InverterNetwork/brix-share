@@ -254,7 +254,7 @@ async function main() {
   const expectedOrigin = local
     ? (filesOriginFromCsp((await get(base!, '/')).res.headers.get('content-security-policy')) ?? '')
     : stageFilesOrigin(stage!, stages[stage!]!.filesBucketSuffix, stages[stage!]!.region);
-  const delivery = await checkDelivery(base!, files, expectedOrigin);
+  const delivery = await checkDelivery(base!, files, expectedOrigin, tag);
   for (const f of delivery) check(false, `delivery: ${f}`);
   check(
     delivery.length === 0,

@@ -5,6 +5,7 @@ export type Route =
   | { name: 'reveal'; id: string; key: string | null }
   | { name: 'manage'; id: string; token: string | null }
   | { name: 'how' }
+  | { name: 'verify' }
   | { name: 'privacy' }
   | { name: 'acceptable' }
   | { name: 'notfound' };
@@ -17,6 +18,7 @@ export function parseRoute(pathname: string, fragment: string): Route {
   if (pathname === '/' || pathname === '') return { name: 'create' };
   // /about was the combined page before v1.1.
   if (pathname === '/how-it-works' || pathname === '/about') return { name: 'how' };
+  if (pathname === '/verify') return { name: 'verify' };
   if (pathname === '/privacy') return { name: 'privacy' };
   if (pathname === '/acceptable-use') return { name: 'acceptable' };
   const m = /^\/(s|m)\/([^/]+)$/.exec(pathname);
@@ -38,6 +40,8 @@ export function pathOf(route: Route): string {
       return '/';
     case 'how':
       return '/how-it-works';
+    case 'verify':
+      return '/verify';
     case 'privacy':
       return '/privacy';
     case 'acceptable':

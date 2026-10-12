@@ -60,6 +60,200 @@ Known-answer test vectors (`shared/vectors/kat-v1.json`) pin the protocol; they 
 
 The full threat model is PLAN section 4.
 
+## Verify this site
+
+Encryption happens in your browser: the code it loads decides whether your secret stays private. Brix Share is open source, its web build is reproducible, and every release publishes SHA-256 hashes of every served file on GitHub, with an artifact attestation signing the manifest. Anyone can rebuild the tag and compare with the manifest; that reproducibility is the underlying root of trust.
+
+The release's `index.html` pins the entry script and stylesheet with Subresource Integrity hashes the browser enforces. All code that handles secrets is bundled into that script. **Every page path must return byte-identical `index.html`: check the exact URL you are about to use.** Checking `/index.html` alone cannot detect a different document served on share links. The expected hash must come from GitHub, never from the site being checked.
+
+1. Read the version from the exact URL you are about to use: `/` for creating a secret, `/s/<id>` for revealing one, or `/m/<id>` for managing it. Remove the `#fragment` first: it contains the key or manage token and is never sent to the server. The version is a label, not proof.
+
+```sh
+# Use the exact URL you are about to use, without its #fragment.
+url='https://share.brix.money/'
+# For a share link, replace <id> with its actual id:
+# url='https://share.brix.money/s/<id>'
+curl -fsS --compressed "$url" | grep brix-share-version
+```
+
+2. Confirm that the served version is [the latest release on GitHub](https://github.com/InverterNetwork/brix-share/releases/latest). Right after a new release, the site can lag for a short while until it is deployed. An older legitimate release still passes its hash checks; an older version that stays live is a warning sign. Download the served release's manifest from GitHub:
+
+```sh
+# Replace vX.Y.Z with the served version, after checking the latest release on GitHub.
+version=vX.Y.Z
+curl -fL "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -o manifest.json
+```
+
+3. Confirm that the release's full commit SHA is on `main`. Open `https://github.com/InverterNetwork/brix-share/commit/<sha>` and check the listed branches, or use the commands below in a clone. A tag name or an attestation alone does not establish that the code went through review.
+
+```sh
+# In a clone of InverterNetwork/brix-share; paste the full release commit from GitHub.
+commit=FULL_RELEASE_COMMIT_SHA
+git fetch origin main
+git branch -r --contains "$commit"
+# The output must include origin/main.
+```
+
+Optionally verify the manifest with the [GitHub CLI](https://cli.github.com/manual/gh_attestation_verify). Check its reported commit against the release commit you just checked. The signer and source-ref restrictions check the workflow and tag name; they do not prove that the commit was reviewed or belongs to `main`:
+
+```sh
+gh attestation verify manifest.json -R InverterNetwork/brix-share
+# Also constrain the signer and tag (recommended):
+gh attestation verify manifest.json -R InverterNetwork/brix-share \
+  --signer-workflow InverterNetwork/brix-share/.github/workflows/release.yml \
+  --source-ref "refs/tags/$version"
+```
+
+The attestation establishes where this manifest came from and detects replacement with different bytes; it does not prove the source is safe. Older releases predating attestations do not have one.
+
+4. Hash the response from that same exact URL on macOS or Linux. `--compressed` hashes the decompressed body, matching the manifest. Response headers must show `Cache-Control: no-store`:
+
+```sh
+# Hash the same exact $url set above, without its #fragment.
+curl -fsS --compressed "$url" | shasum -a 256
+# Linux without shasum: use sha256sum instead
+# Response headers must show Cache-Control: no-store:
+curl -fsSI --compressed "$url" | grep -i '^cache-control:'
+```
+
+On Windows (PowerShell), use that same URL without the fragment:
+
+```powershell
+# Use the exact URL you are about to use, without its #fragment.
+$url = 'https://share.brix.money/'
+# For a share link: $url = 'https://share.brix.money/s/<id>'
+Invoke-WebRequest $url -OutFile index.html
+Get-FileHash index.html -Algorithm SHA256
+```
+
+Read the manifest's `/index.html` entry and compare it with your result (hex case does not matter):
+
+```sh
+jq -r '.files["/index.html"]' manifest.json
+```
+
+Every path must return the same bytes. Equal hashes mean that response matches the release. This does not verify future loads, your browser or the server's access rules. Trust still depends on GitHub, the reviewed source and your own tools. If a hash differs, an older release stays live or verification fails, **do not use the site**; report it to `security@brix.money`.
+
+### The copy your browser received
+
+A server can treat curl differently from a browser, so checking the copy your browser received is the stronger test. “Save page as”, copying the DOM or copying view-source text can change bytes; do not treat those as the response.
+
+Open DevTools' Network panel, load the exact URL without its `#fragment`, and export a HAR with response content as `browser.har`. Loading `/s/<id>` does not consume a retrieval; only clicking Reveal does. Select the document response, not an API response. Extract it without adding a newline and compare with the manifest's `/index.html` hash. The commands require exactly one matching response with content. Browser-menu exports have not been checked in every browser.
+
+```sh
+# Requires jq; use the same exact $url, without its #fragment.
+# browser.har must contain exactly one response for that URL, with content.
+jq -e --arg url "$url" '[.log.entries[] | select(.request.url == $url)] | length == 1 and (.[0].response.content.text | type == "string")' browser.har
+jq -r --arg url "$url" '.log.entries[] | select(.request.url == $url) | .response.content.encoding // "text"' browser.har
+# If encoding is "text":
+jq -j --arg url "$url" '.log.entries[] | select(.request.url == $url) | .response.content.text' browser.har | shasum -a 256
+# If encoding is "base64" (macOS and Linux):
+jq -j --arg url "$url" '.log.entries[] | select(.request.url == $url) | .response.content.text' browser.har | base64 -d | shasum -a 256
+```
+
+Brix Share registers no service workers. Check your browser's developer tools for service workers registered for `share.brix.money`; there must be none. If one is present, unregister it, reload and repeat the checks.
+
+### Optional: check every file
+
+This also checks the proof-of-work worker and static assets. Requires `jq` and bash; the subshell keeps shell options and failures local to this check:
+
+```bash
+# Requires jq and bash. Runs in a subshell so your shell stays unchanged.
+(
+  set -o pipefail
+  base=https://share.brix.money
+  # Validate the manifest before the loop; failed downloads or hashes stop this check.
+  jq -er '.files | to_entries[] | [.key, .value] | @tsv' manifest.json > /dev/null || exit 1
+  while IFS=$'\t' read -r path expected; do
+    actual=$(curl -fsS --compressed "$base$path" | shasum -a 256) || exit 1
+    actual=${actual%% *}
+    [ "$actual" = "$expected" ] || { echo "MISMATCH $path"; exit 1; }
+    echo "OK $path"
+  done < <(jq -r '.files | to_entries[] | [.key, .value] | @tsv' manifest.json)
+)
+```
+
+### PowerShell commands
+
+The /verify OS selector uses these PowerShell equivalents for the same checks; set the exact fragment-free URL first. The deeper checks use the same served release version.
+
+```powershell
+# Use the exact URL without its #fragment; replace <id> for a share link.
+$url = 'https://share.brix.money/'
+# $url = 'https://share.brix.money/s/<id>'
+(Invoke-WebRequest $url -ErrorAction Stop).Content | Select-String 'brix-share-version'
+```
+
+```powershell
+# Use the served version, after checking the latest release on GitHub.
+$version = 'vX.Y.Z'
+Invoke-WebRequest "https://github.com/InverterNetwork/brix-share/releases/download/$version/manifest.json" -OutFile manifest.json -ErrorAction Stop
+```
+
+```powershell
+# Use the same exact $url set above, without the #fragment.
+Invoke-WebRequest $url -OutFile index.html -ErrorAction Stop
+Get-FileHash index.html -Algorithm SHA256
+# Must show no-store:
+(Invoke-WebRequest $url -Method Head -ErrorAction Stop).Headers['Cache-Control']
+```
+
+```powershell
+(Get-Content manifest.json -Raw -Encoding UTF8 | ConvertFrom-Json).files.'/index.html'
+```
+
+```powershell
+gh attestation verify manifest.json -R InverterNetwork/brix-share --signer-workflow InverterNetwork/brix-share/.github/workflows/release.yml --source-ref "refs/tags/$version"
+```
+
+```powershell
+# In a clone; paste the full release commit from GitHub.
+$commit = 'FULL_RELEASE_COMMIT_SHA'
+git fetch origin main
+git branch -r --contains $commit
+# The output must include origin/main.
+```
+
+```powershell
+# Use the same exact $url, without the #fragment.
+$har = Get-Content browser.har -Raw -Encoding UTF8 | ConvertFrom-Json
+$entries = @($har.log.entries | Where-Object { $_.request.url -ceq $url })
+if ($entries.Count -ne 1 -or $null -eq $entries[0].response.content.text) { throw 'Need exactly one document response with content' }
+$content = $entries[0].response.content
+if ($content.encoding -eq 'base64') {
+  $bytes = [Convert]::FromBase64String($content.text)
+} elseif (!$content.encoding -or $content.encoding -eq 'text') {
+  $bytes = [Text.Encoding]::UTF8.GetBytes($content.text)
+} else { throw 'Unsupported HAR encoding' }
+[IO.File]::WriteAllBytes((Join-Path $PWD 'browser-index.html'), $bytes)
+Get-FileHash browser-index.html -Algorithm SHA256
+```
+
+```powershell
+# A local scope keeps options and failures inside this check.
+& {
+  $ErrorActionPreference = 'Stop'
+  $base = 'https://share.brix.money'
+  $manifest = Get-Content manifest.json -Raw -Encoding UTF8 | ConvertFrom-Json
+  $files = @($manifest.files.PSObject.Properties)
+  if ($files.Count -eq 0) { throw 'Manifest has no files' }
+  $temp = [IO.Path]::GetTempFileName()
+  try {
+    foreach ($file in $files) {
+      if (!$file.Name.StartsWith('/') -or $file.Value -notmatch '^[0-9a-f]{64}$') { throw 'Invalid manifest entry' }
+      Invoke-WebRequest "$base$($file.Name)" -OutFile $temp
+      $actual = (Get-FileHash $temp -Algorithm SHA256).Hash
+      if ($actual -ne $file.Value) { throw "MISMATCH $($file.Name)" }
+      "OK $($file.Name)"
+    }
+  } finally { Remove-Item $temp }
+}
+```
+
+The proof-of-work worker is outside the SRI chain (Workers cannot carry SRI); it receives no keys or secret content. For the highest-value keys, encrypt to the recipient's verified public key first and use Brix Share as transport.
+
+The site's [/verify page](https://share.brix.money/verify) repeats these steps, but it could be tampered with too. This README on GitHub is the canonical copy; a “verified” badge from the page or backend would prove nothing against a changed frontend.
+
 ## Repository layout
 
 pnpm workspace, Node 22 (`.nvmrc`):
@@ -78,88 +272,12 @@ pnpm workspace, Node 22 (`.nvmrc`):
 
 ## Working on it
 
-```sh
-fnm use                 # Node 22
-corepack enable         # pnpm from packageManager
-pnpm install
-
-pnpm lint               # ESLint (type-checked) + Prettier
-pnpm typecheck
-pnpm test               # Vitest everywhere; API and sweeper tests start DynamoDB Local in Docker
-pnpm build              # web build (reproducible, SRI)
-BRIX_SHARE_STAGES=infra/stages.example.json pnpm synth   # CDK synth with the example stage config, no AWS credentials
-pnpm --filter @brix-share/web e2e   # Playwright in Chromium, Firefox, WebKit, Pixel 7, iPhone 14 (Docker)
-```
-
-Local app with a real API: `web/e2e/server.ts` serves the built site with production headers, routes `/api/*` into the real handler on DynamoDB Local, and fakes S3 on a second port. See `web/scripts/e2e-docker.sh` for how the suite starts it.
-
-Rules that matter (details in [`CONTRIBUTING.md`](CONTRIBUTING.md)):
-- No crypto libraries. Browser: WebCrypto. Server: `node:crypto` for hashing and HMAC.
-- New dependencies need approval; versions are pinned exactly and pnpm keeps a 7-day release cooldown.
-- Never log bodies, tokens, envelopes, ciphertext or presigned URLs.
-- Existing known-answer vectors are frozen; changing the protocol means protocol `v2`.
-- CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, the Playwright suite, a build-twice reproducibility check and `cdk synth`. CI has no AWS credentials.
+Setup, checks, dependency rules and workflow: [CONTRIBUTING.md](CONTRIBUTING.md). The local app and API test server are in `web/e2e/`; the Playwright suite runs in Docker.
 
 ## Deploying
 
-Deploys are manual, by an admin with an SSO session. Nothing deploys from CI. Full details and incident procedures: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
-
-There is one stage, `prod`, in region eu-central-1, with the certificate and WAF in us-east-1:
-
-| Stack | Region | Contents |
-|---|---|---|
-| `BrixShare-prod-zone` | us-east-1 | Route 53 zone `share.brix.money` |
-| `BrixShare-prod-edge` | us-east-1 | WAF; ACM certificate once the custom domain is on |
-| `BrixShare-prod` | eu-central-1 | Table, buckets, Lambdas, CloudFront, alarms, parameters, web deploy role |
-
-### Prerequisites
-
-`<prod-admin-profile>` is your own AWS CLI profile with admin access to the prod account (SSO or otherwise); `<prod-readonly-profile>` one with read-only access. Profile names are local to each machine, so the docs use placeholders.
-
-```sh
-aws sso login --profile <prod-admin-profile>
-export AWS_PROFILE=<prod-admin-profile>
-gh auth status          # deploy-web sets a repository variable, which needs admin rights
-```
-
-### 1. Infrastructure and API
-
-```sh
-git checkout main && git pull
-scripts/deploy-infra.sh prod
-```
-
-The script refuses a dirty tree or a commit that is not on `origin/main` (the Lambda code is bundled from your checkout), shows `cdk diff`, asks, deploys zone, edge and main in that order, and records the deployed commit in the repository variable `DEPLOYED_INFRA_PROD`.
-
-### 2. Web app
-
-```sh
-git tag vX.Y.Z && git push origin vX.Y.Z   # the release workflow builds twice and publishes manifest.json
-git checkout vX.Y.Z
-node scripts/deploy-web.ts prod vX.Y.Z --dry-run
-node scripts/deploy-web.ts prod vX.Y.Z
-```
-
-`deploy-web.ts` rebuilds locally and refuses to deploy unless every file equals the release manifest CI published. It then assumes the web deploy role (the only principal allowed to write the site), uploads assets before `index.html` with explicit types and caching, invalidates the cache and records the release in `DEPLOYED_PROD` for the monitor.
-
-### 3. Verify
-
-```sh
-node scripts/verify-live.ts prod <site url> vX.Y.Z
-AWS_PROFILE=<prod-readonly-profile> node scripts/scrub-logs.ts prod /tmp/brix-verify-<run>.json
-```
-
-`verify-live` runs every flow against the live site with the real client crypto (create with proof-of-work, reveal, N views, release later, passphrase, files through the real bucket, delete, link-preview GET) and checks headers and every served file against the release. `scrub-logs` then proves none of the ids, tokens, keys or ciphertexts from that run appear in the logs.
-
-### Stage config and first deploy
-
-Account, domain, zone and alert routing are not in the repository. Maintainers keep them in the `STAGES_JSON` repository variable; the deploy scripts write it to the git-ignored `infra/stages.json` (format: `infra/stages.example.json`). Bringing up a new stage, from the CloudFront default domain to the custom domain, is described in the runbook.
-
-### After a deploy
-
-- The `monitor` workflow checks the live site hourly against the deployed release (files and headers) and alerts Slack if `SLACK_WEBHOOK_URL` is set.
-- Alarms go to the stage's topic and to the topics in `alarmTopicArns` (prod: the team's alerts Slack channel); `alarmEmail` adds an e-mail subscription.
-- Circuit breaker, proof-of-work difficulty, full purge, reading access logs: see the runbook.
+Deploys are manual, by a maintainer with admin access. Nothing deploys from CI.
+See [the deployment guide](docs/DEPLOYING.md) and [operations runbook](docs/RUNBOOK.md).
 
 ## License
 

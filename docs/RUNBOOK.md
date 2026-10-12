@@ -49,6 +49,8 @@ The main stack reads the certificate and ACL from the edge stack with weak cross
 
 ## Deploying
 
+Prerequisites and the deployment walkthrough: [DEPLOYING.md](DEPLOYING.md).
+
 ### Infra and API
 
 ```

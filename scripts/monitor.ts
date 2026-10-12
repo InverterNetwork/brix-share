@@ -56,6 +56,7 @@ for (const [name, s] of Object.entries(stages)) {
     base,
     manifest.files,
     stageFilesOrigin(name, s.filesBucketSuffix, s.region),
+    tag,
   );
   if (failures.length === 0) {
     process.stdout.write(

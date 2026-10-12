@@ -54,6 +54,33 @@ describe('checkDelivery', () => {
     expect(await checkDelivery(await site(), MANIFEST, ORIGIN)).toEqual([]);
   });
 
+  it('checks the deployed version on every document path', async () => {
+    const html = '<meta name="brix-share-version" content="v1.3.0 abc1234">';
+    const base = await site({ file: ['/index.html', html] });
+    expect(await checkDelivery(base, null, ORIGIN, 'v1.3.0')).toEqual([]);
+    expect(
+      (await checkDelivery(base, null, ORIGIN, 'v1.2.0')).some((f) =>
+        f.includes('/verify: build version'),
+      ),
+    ).toBe(true);
+  });
+  it('rejects missing build metadata', async () => {
+    expect(
+      (await checkDelivery(await site(), MANIFEST, ORIGIN, 'v1.3.0')).some((f) =>
+        f.includes('build version'),
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects duplicated build metadata even when both versions match', async () => {
+    const html = '<meta name="brix-share-version" content="v1.3.0 abc1234">'.repeat(2);
+    expect(
+      (
+        await checkDelivery(await site({ file: ['/index.html', html] }), null, ORIGIN, 'v1.3.0')
+      ).some((f) => f.includes('build version')),
+    ).toBe(true);
+  });
+
   it('catches a tampered asset, including one only referenced from JS', async () => {
     const f = await checkDelivery(
       await site({ file: ['/assets/worker-a.js', 'evil()'] }),

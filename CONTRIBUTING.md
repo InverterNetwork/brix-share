@@ -65,6 +65,8 @@ Approved and in use:
 | `esbuild` | web, infra | bundling |
 | `aws-cdk-lib`, `constructs`, `aws-cdk` | infra | infrastructure as code |
 
+`actions/attest-build-provenance` is approved for signing release manifests in GitHub Actions (pinned by commit SHA). No runtime dependency.
+
 Also pre-approved but unused: `@preact/preset-vite` (Vite's built-in JSX transform suffices), `lucide-static`. Types that would need extra packages (Lambda events, `qrcode`) are written by hand instead.
 
 ## Workflow
@@ -73,7 +75,7 @@ Also pre-approved but unused: `@preact/preset-vite` (Vite's built-in JSX transfo
 - Commit messages: `type(scope): description`, imperative.
 - Record every judgment call in `docs/DECISIONS.md`: date, decision, reason. Changes to the crypto protocol, the access semantics, the data model, the security claims in `docs/PLAN.md` section 4 or the cost shape need explicit maintainer agreement first.
 - Releases are `v*` tags on `main`. The release workflow builds twice, checks the builds are identical and publishes a manifest of every served file's SHA-256 on a GitHub release. Tags cannot be moved or deleted.
-- Deploys are manual and done by a maintainer with admin access; nothing deploys from CI. See the deploy section of the [README](README.md) and [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+- Deploys are manual and done by a maintainer with admin access; nothing deploys from CI. See [the deployment guide](docs/DEPLOYING.md) and [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 ## Roadmap
 
