@@ -30,7 +30,9 @@ export function HowItWorksScreen() {
             Your browser generates a random 256-bit key and encrypts the title, the text and any
             file names with AES-256-GCM. The key goes into the part of the link after the #, which
             browsers never send to a server. Brix stores the ciphertext, the policy you chose and a
-            hash of each of the separate manage and retrieval tokens.
+            hash of each of the separate manage and retrieval tokens. Each attachment has its own
+            random key, held inside the encrypted text. A link leaked after the text is gone cannot
+            unlock leftover file objects.
           </P>
           <P>
             A secret ends after its last allowed retrieval, at its expiry, or when you delete it.

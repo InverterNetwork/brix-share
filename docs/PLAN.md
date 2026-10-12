@@ -88,13 +88,14 @@ Region: eu-central-1 only. Consume authority is single-writer; no global tables,
 
 All client-side, WebCrypto only. No crypto libraries in the bundle. Protocol version string `v1` is stored with every secret and bound into the AAD so the client refuses mismatched envelopes.
 
-Identifiers and keys (all from `crypto.getRandomValues`):
+Identifiers, keys and capabilities (random values use `crypto.getRandomValues`; the consume token is derived):
 - `id`: 16 random bytes, base64url (22 chars). Client-chosen, server accepts only if unused (conditional put). Independent of the key.
+- `K_file`: 32 independent random bytes per attachment; carried only inside the encrypted text payload.
 - `K_link`: 32 random bytes. Carried only in the share URL fragment, base64url (43 chars).
 - `T_consume`: 32 bytes derived from `K_link` (below); server stores `SHA-256(T_consume)` as hex. Authorizes availability and retrieval, independently of the passphrase.
 - `T_manage`: 32 random bytes. Carried only in the manage URL fragment. Server stores `SHA-256(T_manage)` as hex.
 - `salt`: 16 random bytes, present only if a passphrase is used.
-- One fresh 12-byte IV per encryption call (text envelope, each file). Each IV is used once under `K_data`.
+- One fresh 12-byte IV per encryption call (text envelope, each file). The text IV is used once under `K_data`; each file IV is used once under its own `K_file`.
 
 Key derivation:
 ```
@@ -114,16 +115,18 @@ Rationale: someone holding the full link and the ciphertext can test passphrase 
 Text envelope:
 ```
 AAD_text   = UTF-8("brix-share/v1|" + id + "|text|" + (passphrase ? "p" : "n"))
-payload    = JSON { title: string | null, text: string, files: [{ fileId, name, size, mime }] }
+payload    = JSON { title: string | null, text: string, files: [{ fileId, name, size, mime, key: base64url(K_file) }] }
 ct_text    = AES-256-GCM(K_data, iv_text, UTF-8(JSON(payload)), AAD_text, tagLength 128)
 ```
 File envelope, one per attachment:
 ```
 AAD_file   = UTF-8("brix-share/v1|" + id + "|file|" + fileId)
-ct_file    = AES-256-GCM(K_data, iv_file, fileBytes, AAD_file, tagLength 128)
+ct_file    = AES-256-GCM(K_file, iv_file, fileBytes, AAD_file, tagLength 128)
 stored as  = iv_file (12 bytes) || ct_file   in S3 object key  <id>/<fileId>
 ```
-Files are encrypted whole in memory (25 MB total cap keeps this simple; GCM's limit is far higher). File names and MIME types live only inside the encrypted text payload; S3 sees opaque keys and sizes.
+Per-file keys mean file objects kept for the download grace cannot be decrypted with a later-leaked link alone once the text envelope is gone. A recipient who already obtained the text payload can retain its file keys.
+
+Files are encrypted whole in memory (25 MB total cap keeps this simple; GCM's limit is far higher). Each payload file entry must include a canonical base64url 32-byte key; keyless or malformed entries are refused. File names, MIME types and file keys live only inside the encrypted text payload; S3 sees opaque keys and sizes.
 
 Policy metadata (views, expiry, availableFrom) is not inside the AAD: the server must enforce it and it is not secret. The recipient sees it as information only.
 
@@ -131,7 +134,7 @@ Envelope stored in DynamoDB (JSON string):
 ```
 { v: "v1", id, iv: b64url, salt: b64url | null, ct: b64url, hasPassphrase: bool, fileIds: [string] }
 ```
-Plaintext, `K_link` and `K_data` never leave the browser. The client strips the fragment via `history.replaceState` after reading it and keeps keys only in memory. Nothing is written to localStorage, sessionStorage or IndexedDB. (Exception since v1.1, see DECISIONS.md 2026-10-10: an open manage page keeps its manage token in that tab's sessionStorage so a reload works; browsers that restore closed tabs restore it too. Share-link keys stay in memory only.)
+Plaintext, `K_link`, `K_data` and `K_file` never leave the browser unencrypted. The client strips the fragment via `history.replaceState` after reading it and keeps keys only in memory. Nothing is written to localStorage, sessionStorage or IndexedDB. (Exception since v1.1, see DECISIONS.md 2026-10-10: an open manage page keeps its manage token in that tab's sessionStorage so a reload works; browsers that restore closed tabs restore it too. Share-link keys stay in memory only.)
 
 Decryption failure (wrong passphrase or tampering) is reported as such; the retrieved envelope stays in memory so the recipient can retry the passphrase without a second consume.
 

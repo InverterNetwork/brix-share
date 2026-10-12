@@ -122,12 +122,14 @@ describe('kat-v1 file vectors', () => {
     const iv = stored.subarray(0, 12);
     expect(stored.length).toBe(hex(v.contentHex).length + 28);
     expect(
-      gcmDecrypt(hex(v.kData), iv, stored.subarray(12), Buffer.from(aad)).toString('hex'),
+      gcmDecrypt(hex(v.kFile ?? v.kData), iv, stored.subarray(12), Buffer.from(aad)).toString(
+        'hex',
+      ),
     ).toBe(v.contentHex);
     expect(
       Buffer.concat([
         iv,
-        gcmEncrypt(hex(v.kData), iv, hex(v.contentHex), Buffer.from(aad)),
+        gcmEncrypt(hex(v.kFile ?? v.kData), iv, hex(v.contentHex), Buffer.from(aad)),
       ]).toString('hex'),
     ).toBe(v.storedHex);
   });
@@ -163,10 +165,10 @@ describe('kat-v1 negative vectors', () => {
     const stored = hex(n.storedHex);
     expect(() =>
       gcmDecrypt(
-        hex(base.kData),
+        hex(n.keyHex ?? base.kFile ?? base.kData),
         stored.subarray(0, 12),
         stored.subarray(12),
-        Buffer.from(fileAad(base.id, n.fileId)),
+        Buffer.from(fileAad(n.id ?? base.id, n.fileId)),
       ),
     ).toThrow();
   });

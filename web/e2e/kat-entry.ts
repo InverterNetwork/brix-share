@@ -13,6 +13,8 @@ import {
 } from '@brix-share/shared';
 import {
   DecryptError,
+  ProtocolError,
+  importFileKey,
   checkEnvelope,
   deriveKDataBytes,
   deriveKey,
@@ -48,7 +50,18 @@ async function run() {
       if (bytesToHex(await deriveKDataBytes(kLink, v.passphrase, envelopeSalt(env))) !== v.kData)
         return false;
       const key = await deriveKey(kLink, v.passphrase, envelopeSalt(env));
-      const payload = PayloadSchema.parse(JSON.parse(v.plaintext));
+      const parsed = PayloadSchema.safeParse(JSON.parse(v.plaintext));
+      if (v.name === 'text-with-files') {
+        if (parsed.success) return false;
+        try {
+          await openText(env, key);
+          return false;
+        } catch (e) {
+          return e instanceof ProtocolError;
+        }
+      }
+      if (!parsed.success) throw parsed.error;
+      const payload = parsed.data;
       const sealed = await sealText({
         id: env.id,
         key,
@@ -63,11 +76,14 @@ async function run() {
   for (const v of kat.files) {
     await check(`file:${v.name}`, async () => {
       const t = byName[v.textCase]!;
-      const key = await deriveKey(
-        b64urlDecode(t.kLink),
-        t.passphrase,
-        envelopeSalt(t.envelope as Envelope),
-      );
+      const key =
+        v.kFile !== undefined
+          ? await importFileKey(hexToBytes(v.kFile))
+          : await deriveKey(
+              b64urlDecode(t.kLink),
+              t.passphrase,
+              envelopeSalt(t.envelope as Envelope),
+            );
       const stored = hexToBytes(v.storedHex);
       const sealed = await sealFile(
         v.id,
@@ -110,13 +126,18 @@ async function run() {
     await check(`negative-file:${n.name}`, async () => {
       const base = kat.files.find((f) => f.name === n.base)!;
       const t = byName[base.textCase]!;
-      const key = await deriveKey(
-        b64urlDecode(t.kLink),
-        t.passphrase,
-        envelopeSalt(t.envelope as Envelope),
-      );
+      const key =
+        n.keyHex !== undefined
+          ? await importFileKey(hexToBytes(n.keyHex))
+          : base.kFile !== undefined
+            ? await importFileKey(hexToBytes(base.kFile))
+            : await deriveKey(
+                b64urlDecode(t.kLink),
+                t.passphrase,
+                envelopeSalt(t.envelope as Envelope),
+              );
       try {
-        await openFile(base.id, n.fileId, key, hexToBytes(n.storedHex));
+        await openFile(n.id ?? base.id, n.fileId, key, hexToBytes(n.storedHex));
         return false;
       } catch (e) {
         return e instanceof DecryptError;

@@ -15,6 +15,8 @@ import {
   deriveKDataBytes,
   deriveKey,
   deriveConsumeToken,
+  importFileKey,
+  newFileKey,
   envelopeSalt,
   newId,
   newLinkKey,
@@ -37,7 +39,15 @@ describe('known-answer vectors (protocol v1)', () => {
         v.kData,
       );
       const key = await deriveKey(kLink, v.passphrase, envelopeSalt(env));
-      const payload = PayloadSchema.parse(JSON.parse(v.plaintext));
+      const parsed = PayloadSchema.safeParse(JSON.parse(v.plaintext));
+      // Frozen historical text-with-files vector proves keyless payloads are now refused.
+      if (v.name === 'text-with-files') {
+        expect(parsed.success).toBe(false);
+        await expect(openText(env, key)).rejects.toBeInstanceOf(ProtocolError);
+        return;
+      }
+      if (!parsed.success) throw parsed.error;
+      const payload = parsed.data;
       const sealed = await sealText({
         id: env.id,
         key,
@@ -52,11 +62,14 @@ describe('known-answer vectors (protocol v1)', () => {
 
   it.each(kat.files)('file $name: seals and opens the exact stored bytes', async (v) => {
     const t = byName[v.textCase]!;
-    const key = await deriveKey(
-      b64urlDecode(t.kLink),
-      t.passphrase,
-      envelopeSalt(t.envelope as Envelope),
-    );
+    const key =
+      v.kFile !== undefined
+        ? await importFileKey(hexToBytes(v.kFile))
+        : await deriveKey(
+            b64urlDecode(t.kLink),
+            t.passphrase,
+            envelopeSalt(t.envelope as Envelope),
+          );
     const stored = hexToBytes(v.storedHex);
     const content = hexToBytes(v.contentHex);
     expect(bytesToHex(await sealFile(v.id, v.fileId, key, content, stored.slice(0, 12)))).toBe(
@@ -95,14 +108,19 @@ describe('known-answer vectors (protocol v1)', () => {
   it.each(kat.negativeFiles)('negative file $name is refused', async (n) => {
     const base = kat.files.find((f) => f.name === n.base)!;
     const t = byName[base.textCase]!;
-    const key = await deriveKey(
-      b64urlDecode(t.kLink),
-      t.passphrase,
-      envelopeSalt(t.envelope as Envelope),
-    );
-    await expect(openFile(base.id, n.fileId, key, hexToBytes(n.storedHex))).rejects.toBeInstanceOf(
-      DecryptError,
-    );
+    const key =
+      n.keyHex !== undefined
+        ? await importFileKey(hexToBytes(n.keyHex))
+        : base.kFile !== undefined
+          ? await importFileKey(hexToBytes(base.kFile))
+          : await deriveKey(
+              b64urlDecode(t.kLink),
+              t.passphrase,
+              envelopeSalt(t.envelope as Envelope),
+            );
+    await expect(
+      openFile(n.id ?? base.id, n.fileId, key, hexToBytes(n.storedHex)),
+    ).rejects.toBeInstanceOf(DecryptError);
   });
 });
 
@@ -208,5 +226,23 @@ describe('consume capability', () => {
     await expect(deriveConsumeToken(new Uint8Array(31))).rejects.toThrow(ProtocolError);
     for (const token of ['bad!', '', 'A'.repeat(42), 'A'.repeat(44)])
       await expect(hashConsumeToken(token)).rejects.toThrow();
+  });
+});
+
+describe('per-file keys', () => {
+  it('imports independent non-extractable AES keys and refuses malformed payload keys', async () => {
+    const raw = newFileKey();
+    const other = newFileKey();
+    expect(bytesToHex(raw) === bytesToHex(other)).toBe(false);
+    const key = await importFileKey(raw);
+    expect(key.extractable).toBe(false);
+    await expect(globalThis.crypto.subtle.exportKey('raw', key)).rejects.toThrow();
+    await expect(importFileKey(new Uint8Array(31))).rejects.toThrow(ProtocolError);
+    const v = kat.text.find((v) => v.name === 'text-with-file-keys')!;
+    const payload = JSON.parse(v.plaintext) as { files: { key?: string }[] };
+    for (const bad of [undefined, null, '', 'bad!', 'A'.repeat(42), 'A'.repeat(44)]) {
+      const candidate = { ...payload, files: payload.files.map((f) => ({ ...f, key: bad })) };
+      expect(PayloadSchema.safeParse(candidate).success).toBe(false);
+    }
   });
 });

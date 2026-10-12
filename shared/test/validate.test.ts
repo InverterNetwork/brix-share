@@ -175,7 +175,13 @@ describe('validateCreateRequest', () => {
 
 describe('payloadMatchesEnvelope', () => {
   const env = EnvelopeSchema.parse(body({}, { fileIds: [id(2), id(3)] }).envelope);
-  const file = (n: number) => ({ fileId: id(n), name: 'a', size: 1, mime: '' });
+  const file = (n: number) => ({
+    fileId: id(n),
+    name: 'a',
+    size: 1,
+    mime: '',
+    key: b64urlEncode(new Uint8Array(32)),
+  });
   it('requires same files in the same order', () => {
     expect(
       payloadMatchesEnvelope(

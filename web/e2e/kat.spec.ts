@@ -6,7 +6,7 @@ test('crypto module passes every known-answer vector in this engine', async ({ p
   const kat = await page.evaluate(() => window.__kat!);
   expect(kat.results.filter((r) => !r.ok)).toEqual([]);
   // Text, file, negative and consume-capability vectors.
-  expect(kat.results.length).toBe(20);
+  expect(kat.results.length).toBe(29);
   expect(kat.ok).toBe(true);
 });
 

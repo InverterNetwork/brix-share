@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   b64urlEncode,
+  b64urlDecode,
   hashManageToken,
   hashConsumeToken,
   secToIso,
@@ -25,6 +26,8 @@ import {
   envelopeSalt,
   newId,
   newLinkKey,
+  newFileKey,
+  importFileKey,
   newManageToken,
   newSalt,
   openFile,
@@ -123,10 +126,12 @@ async function create(opts: {
   const attachments = await Promise.all(
     (opts.files ?? []).map(async (bytes, i) => {
       const fileId = newId();
+      const kFile = newFileKey();
       return {
         fileId,
         bytes,
-        stored: await sealFile(id, fileId, key, bytes),
+        stored: await sealFile(id, fileId, await importFileKey(kFile), bytes),
+        key: b64urlEncode(kFile),
         name: `verify-${i}.bin`,
       };
     }),
@@ -143,6 +148,7 @@ async function create(opts: {
         name: a.name,
         size: a.bytes.length,
         mime: 'application/octet-stream',
+        key: a.key,
       })),
     },
   });
@@ -403,8 +409,11 @@ async function main() {
     'release later: 425 before availableFrom',
   );
   check(
-    (await api('GET', `/api/secrets/${later.id}`)).json?.availableFrom ===
-      early.json?.availableFrom,
+    (
+      await api('GET', `/api/secrets/${later.id}`, undefined, {
+        'x-consume-token': later.consumeToken,
+      })
+    ).json?.availableFrom === early.json?.availableFrom,
     'availability check: reports the release time',
   );
   check(
@@ -422,11 +431,26 @@ async function main() {
   const fr = await consume(withFile.id);
   const downloads = (fr.json?.downloads ?? []) as { fileId: string; url: string }[];
   check(fr.status === 200 && downloads.length === 2, 'consume returns two download URLs');
-  const fkey = await deriveKey(withFile.kLink, null, null);
+  const textKey = await deriveKey(withFile.kLink, null, null);
+  const filePayload = await openText(
+    checkEnvelope((fr.json as unknown as ConsumeResponse).envelope, withFile.id),
+    textKey,
+  );
+  check(
+    new Set(filePayload.files.map((f) => f.key)).size === 2,
+    'attachments have independent keys',
+  );
+  terms.push(...filePayload.files.map((f) => f.key));
   const got = await Promise.all(
     downloads.map(async (d) => {
       const r = await fetch(d.url);
-      return openFile(withFile.id, d.fileId, fkey, new Uint8Array(await r.arrayBuffer()));
+      const meta = filePayload.files.find((f) => f.fileId === d.fileId)!;
+      return openFile(
+        withFile.id,
+        d.fileId,
+        await importFileKey(b64urlDecode(meta.key)),
+        new Uint8Array(await r.arrayBuffer()),
+      );
     }),
   );
   check(

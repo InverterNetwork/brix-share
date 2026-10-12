@@ -152,7 +152,7 @@ export function RevealScreen({
   const decrypt = async (envelope: Envelope, policy: Policy, passphrase: string | null) => {
     const key = await deriveKey(keyBytes.current!, passphrase, envelopeSalt(envelope));
     const payload = await openText(envelope, key);
-    const files = await decryptFiles(id, key, payload, encryptedFiles.current);
+    const files = await decryptFiles(id, payload, encryptedFiles.current);
     encryptedFiles.current = [];
     setState({ kind: 'revealed', payload, policy, files });
   };

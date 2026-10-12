@@ -79,8 +79,4 @@ Also pre-approved but unused: `@preact/preset-vite` (Vite's built-in JSX transfo
 
 ## Roadmap
 
-Planned protocol follow-up:
-- Per-file random keys carried inside the encrypted payload, so file objects that outlive a secret by a few minutes cannot be decrypted with a later-leaked link alone.
-
-Other:
 - Candidates for a later version (`docs/PLAN.md` section 15): pinned offline client, secret request links, retrieval notifications, Argon2id as protocol `v2`.

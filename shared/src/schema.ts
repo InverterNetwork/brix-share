@@ -5,6 +5,7 @@ import {
   GCM_TAG_BYTES,
   ID_BYTES,
   IV_BYTES,
+  KEY_BYTES,
   MAX_CT_CHARS,
   MAX_FILES,
   MAX_TOTAL_FILE_BYTES,
@@ -86,6 +87,7 @@ export const PayloadSchema = z.strictObject({
         name: z.string().max(1024),
         size: z.int().min(0).max(MAX_TOTAL_FILE_BYTES),
         mime: z.string().max(255),
+        key: b64urlBytes(KEY_BYTES),
       }),
     )
     .max(MAX_FILES),

@@ -74,7 +74,7 @@ interface TextCase {
   payload: {
     title: string | null;
     text: string;
-    files: { fileId: string; name: string; size: number; mime: string }[];
+    files: { fileId: string; name: string; size: number; mime: string; key?: string }[];
   };
 }
 
@@ -84,10 +84,13 @@ interface FileCase {
   fileId: Uint8Array;
   iv: Uint8Array;
   content: Uint8Array;
+  key?: Uint8Array;
 }
 
 const fileIdA = seq(0xa0, 16);
 const fileIdB = seq(0xb0, 16);
+const fileKeyA = seq(0xe0, 32);
+const fileKeyB = seq(0xf0, 32);
 const fileContentA = enc.encode(
   '-----BEGIN PGP PUBLIC KEY BLOCK-----\nexample\n-----END PGP PUBLIC KEY BLOCK-----\n',
 );
@@ -164,6 +167,35 @@ const textCases: TextCase[] = [
   },
 ];
 
+textCases.push({
+  name: 'text-with-file-keys',
+  id: seq(0x71, 16),
+  kLink: seq(0x81, 32),
+  iv: seq(0x91, 12),
+  passphrase: 'orbit-cactus-ninety-velvet-harbor',
+  salt: seq(0x99, 16),
+  payload: {
+    title: 'Files with independent keys',
+    text: 'Two keyed files.',
+    files: [
+      {
+        fileId: b64urlEncode(fileIdA),
+        name: 'audit-handover.pub.asc',
+        size: fileContentA.length,
+        mime: 'application/pgp-keys',
+        key: b64urlEncode(fileKeyA),
+      },
+      {
+        fileId: b64urlEncode(fileIdB),
+        name: 'empty.txt',
+        size: 0,
+        mime: 'text/plain',
+        key: b64urlEncode(fileKeyB),
+      },
+    ],
+  },
+});
+
 const fileCases: FileCase[] = [
   {
     name: 'file-pgp',
@@ -180,6 +212,25 @@ const fileCases: FileCase[] = [
     content: new Uint8Array(0),
   },
 ];
+
+fileCases.push(
+  {
+    name: 'file-key-pgp',
+    textCase: 'text-with-file-keys',
+    fileId: fileIdA,
+    iv: seq(0xc1, 12),
+    content: fileContentA,
+    key: fileKeyA,
+  },
+  {
+    name: 'file-key-empty',
+    textCase: 'text-with-file-keys',
+    fileId: fileIdB,
+    iv: seq(0xd1, 12),
+    content: new Uint8Array(0),
+    key: fileKeyB,
+  },
+);
 
 const flip = (b: Uint8Array, at: number) => {
   const c = Uint8Array.from(b);
@@ -250,7 +301,7 @@ for (const f of fileCases) {
   const id = idByCase.get(f.textCase)!;
   const fileId = b64urlEncode(f.fileId);
   const aad = fileAad(id, fileId);
-  const ct = await seal(kData, f.iv, f.content, aad);
+  const ct = await seal(f.key ?? kData, f.iv, f.content, aad);
   const stored = new Uint8Array(f.iv.length + ct.length);
   stored.set(f.iv);
   stored.set(ct, f.iv.length);
@@ -260,6 +311,7 @@ for (const f of fileCases) {
     id,
     fileId,
     kData: bytesToHex(kData),
+    ...(f.key ? { kFile: bytesToHex(f.key) } : {}),
     aad: new TextDecoder().decode(aad),
     contentHex: bytesToHex(f.content),
     storedHex: bytesToHex(stored),
@@ -345,6 +397,56 @@ const negativeFiles = [
   },
 ];
 
+const keyedBase = fileVectors[2] as {
+  name: string;
+  fileId: string;
+  id: string;
+  storedHex: string;
+  kData: string;
+};
+const keyedNegatives = [
+  {
+    name: 'file-key-wrong-key',
+    base: keyedBase.name,
+    fileId: keyedBase.fileId,
+    storedHex: keyedBase.storedHex,
+    keyHex: bytesToHex(fileKeyB),
+  },
+  {
+    name: 'file-key-link-key',
+    base: keyedBase.name,
+    fileId: keyedBase.fileId,
+    storedHex: keyedBase.storedHex,
+    keyHex: bytesToHex(textCases.at(-1)!.kLink),
+  },
+  {
+    name: 'file-key-data-key',
+    base: keyedBase.name,
+    fileId: keyedBase.fileId,
+    storedHex: keyedBase.storedHex,
+    keyHex: keyedBase.kData,
+  },
+  {
+    name: 'file-key-bit-flip',
+    base: keyedBase.name,
+    fileId: keyedBase.fileId,
+    storedHex: bytesToHex(flip(Uint8Array.from(Buffer.from(keyedBase.storedHex, 'hex')), 20)),
+  },
+  {
+    name: 'file-key-fileId-swapped',
+    base: keyedBase.name,
+    fileId: b64urlEncode(fileIdB),
+    storedHex: keyedBase.storedHex,
+  },
+  {
+    name: 'file-key-id-swapped',
+    base: keyedBase.name,
+    fileId: keyedBase.fileId,
+    id: base.envelope.id,
+    storedHex: keyedBase.storedHex,
+  },
+];
+
 const consumeVectors = [];
 for (const c of textCases.slice(0, 2)) {
   const ikm = await subtle.importKey('raw', c.kLink as BufferSource, 'HKDF', false, ['deriveBits']);
@@ -374,7 +476,7 @@ const out = {
   text: textVectors,
   files: fileVectors,
   negativeText: negative,
-  negativeFiles,
+  negativeFiles: [...negativeFiles, ...keyedNegatives],
   consume: consumeVectors,
 };
 
@@ -389,6 +491,6 @@ if (process.argv.includes('--check')) {
 } else {
   writeFileSync(target, json);
   console.log(
-    `wrote ${textVectors.length} text, ${fileVectors.length} file and ${negative.length + negativeFiles.length} negative vectors`,
+    `wrote ${textVectors.length} text, ${fileVectors.length} file and ${negative.length + negativeFiles.length + keyedNegatives.length} negative vectors`,
   );
 }

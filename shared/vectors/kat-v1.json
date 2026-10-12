@@ -124,6 +124,29 @@
           "sLGys7S1tre4ubq7vL2-vw"
         ]
       }
+    },
+    {
+      "name": "text-with-file-keys",
+      "kLink": "gYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6A",
+      "passphrase": "orbit-cactus-ninety-velvet-harbor",
+      "passphraseNfcHex": "6f726269742d6361637475732d6e696e6574792d76656c7665742d686172626f72",
+      "pbkdf2Hex": "5ffdf4afbd3cc914ee2bd6fae56c1a77a795a7cd02a8f0c695b618f211859c51",
+      "kData": "bb985a98a71f4497e41e7469b0fe0e1af97b77281f7dc5e84451da2c98ffff15",
+      "aad": "brix-share/v1|cXJzdHV2d3h5ent8fX5_gA|text|p",
+      "plaintext": "{\"title\":\"Files with independent keys\",\"text\":\"Two keyed files.\",\"files\":[{\"fileId\":\"oKGio6SlpqeoqaqrrK2urw\",\"name\":\"audit-handover.pub.asc\",\"size\":80,\"mime\":\"application/pgp-keys\",\"key\":\"4OHi4-Tl5ufo6err7O3u7_Dx8vP09fb3-Pn6-_z9_v8\"},{\"fileId\":\"sLGys7S1tre4ubq7vL2-vw\",\"name\":\"empty.txt\",\"size\":0,\"mime\":\"text/plain\",\"key\":\"8PHy8_T19vf4-fr7_P3-_wABAgMEBQYHCAkKCwwNDg8\"}]}",
+      "plaintextHex": "7b227469746c65223a2246696c6573207769746820696e646570656e64656e74206b657973222c2274657874223a2254776f206b657965642066696c65732e222c2266696c6573223a5b7b2266696c654964223a226f4b47696f36536c7071656f71617172724b32757277222c226e616d65223a2261756469742d68616e646f7665722e7075622e617363222c2273697a65223a38302c226d696d65223a226170706c69636174696f6e2f7067702d6b657973222c226b6579223a22344f4869342d546c3575666f36657272374f3375375f447838765030396662332d506e362d5f7a395f7638227d2c7b2266696c654964223a22734c4779733753317472653475627137764c322d7677222c226e616d65223a22656d7074792e747874222c2273697a65223a302c226d696d65223a22746578742f706c61696e222c226b6579223a2238504879385f5431397666342d6672375f50332d5f77414241674d454251594843416b4b4377774e446738227d5d7d",
+      "envelope": {
+        "v": "v1",
+        "id": "cXJzdHV2d3h5ent8fX5_gA",
+        "iv": "kZKTlJWWl5iZmpuc",
+        "salt": "mZqbnJ2en6ChoqOkpaanqA",
+        "ct": "qyxmLpfq3EfJEF-S6-CBYlD3DrgH1V3lA_Ew_XMcxOBXwqIFwOjsA6h4DbTax87fjPvXr-hBHLPCTbzllLrl5d498oiVgPWp3mIRdee_WqQ5xDge6zp5-CnX49QPKNMc_uWJjm7SOyDLQxd-g-8PvR9PeGFo_TqRyih8JdAxApYOGjUksdwVwxPFPRl6pqgy2g4NnUMhvRR-dkNpLvYspGwNmS7vlocTmfQUPSd6CngE67UVSLHVAdoXemIVFT09lupHCia7gP84gjbhdgtGjbF1TKU7uHlankpQRy-cgu51bcupjgx-hhAW88m0bSs_6hUrv0Wns2fzY85g_JjRfqbGwwmjy_-Cy1tIAVqnQffZb0XoU-eEWLv0Z3HBTz5ktBX8HCL1Wt7Sg7FvsBJomYZF5jnvGfgf4dXAHc3fQk3ZXiu44wSmbFssa7ryy25mvzvdNToAep2KHgagIBFu_ceggnbQ-vMzMIH5PfSxPzUg4SCEQUc960HpBPxaObjYyRLB",
+        "hasPassphrase": true,
+        "fileIds": [
+          "oKGio6SlpqeoqaqrrK2urw",
+          "sLGys7S1tre4ubq7vL2-vw"
+        ]
+      }
     }
   ],
   "files": [
@@ -146,6 +169,28 @@
       "aad": "brix-share/v1|cHFyc3R1dnd4eXp7fH1-fw|file|sLGys7S1tre4ubq7vL2-vw",
       "contentHex": "",
       "storedHex": "d0d1d2d3d4d5d6d7d8d9dadb2a52f346044852d053c603d4adcbc90a"
+    },
+    {
+      "name": "file-key-pgp",
+      "textCase": "text-with-file-keys",
+      "id": "cXJzdHV2d3h5ent8fX5_gA",
+      "fileId": "oKGio6SlpqeoqaqrrK2urw",
+      "kData": "bb985a98a71f4497e41e7469b0fe0e1af97b77281f7dc5e84451da2c98ffff15",
+      "kFile": "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "aad": "brix-share/v1|cXJzdHV2d3h5ent8fX5_gA|file|oKGio6SlpqeoqaqrrK2urw",
+      "contentHex": "2d2d2d2d2d424547494e20504750205055424c4943204b455920424c4f434b2d2d2d2d2d0a6578616d706c650a2d2d2d2d2d454e4420504750205055424c4943204b455920424c4f434b2d2d2d2d2d0a",
+      "storedHex": "c1c2c3c4c5c6c7c8c9cacbcc7072b8919b6283db1f26b499403082bb5eafb72a30b35fce25fcd1fa555df12c5d248be3c9a772e17cbecdc7bcd59429bd3451a83fa399c346e19e77809961e1a1e45643dffaf9c3919a4f0077912fa56a74a7c6cac565e29916c5bb742aab81"
+    },
+    {
+      "name": "file-key-empty",
+      "textCase": "text-with-file-keys",
+      "id": "cXJzdHV2d3h5ent8fX5_gA",
+      "fileId": "sLGys7S1tre4ubq7vL2-vw",
+      "kData": "bb985a98a71f4497e41e7469b0fe0e1af97b77281f7dc5e84451da2c98ffff15",
+      "kFile": "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f",
+      "aad": "brix-share/v1|cXJzdHV2d3h5ent8fX5_gA|file|sLGys7S1tre4ubq7vL2-vw",
+      "contentHex": "",
+      "storedHex": "d1d2d3d4d5d6d7d8d9dadbdc78c5f47cf473d1eeb024ee20333b6a57"
     }
   ],
   "negativeText": [
@@ -275,6 +320,46 @@
       "base": "file-pgp",
       "fileId": "oKGio6SlpqeoqaqrrK2urw",
       "storedHex": "c0c1c2c3c4c5c6c7c8c9cacb31bc67aad4a00ae043265ec156a217892bac3bb40007c4fc5ab10f7911c699c7cf1194439072b4bf63c3cdf9bc9a854445384ef6d92cf72ec604b22600304e12a5bc7a506845194ea23e4d8ee3e030861780a0fcda7cb771c6877af2830b7c2a"
+    },
+    {
+      "name": "file-key-wrong-key",
+      "base": "file-key-pgp",
+      "fileId": "oKGio6SlpqeoqaqrrK2urw",
+      "storedHex": "c1c2c3c4c5c6c7c8c9cacbcc7072b8919b6283db1f26b499403082bb5eafb72a30b35fce25fcd1fa555df12c5d248be3c9a772e17cbecdc7bcd59429bd3451a83fa399c346e19e77809961e1a1e45643dffaf9c3919a4f0077912fa56a74a7c6cac565e29916c5bb742aab81",
+      "keyHex": "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f"
+    },
+    {
+      "name": "file-key-link-key",
+      "base": "file-key-pgp",
+      "fileId": "oKGio6SlpqeoqaqrrK2urw",
+      "storedHex": "c1c2c3c4c5c6c7c8c9cacbcc7072b8919b6283db1f26b499403082bb5eafb72a30b35fce25fcd1fa555df12c5d248be3c9a772e17cbecdc7bcd59429bd3451a83fa399c346e19e77809961e1a1e45643dffaf9c3919a4f0077912fa56a74a7c6cac565e29916c5bb742aab81",
+      "keyHex": "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"
+    },
+    {
+      "name": "file-key-data-key",
+      "base": "file-key-pgp",
+      "fileId": "oKGio6SlpqeoqaqrrK2urw",
+      "storedHex": "c1c2c3c4c5c6c7c8c9cacbcc7072b8919b6283db1f26b499403082bb5eafb72a30b35fce25fcd1fa555df12c5d248be3c9a772e17cbecdc7bcd59429bd3451a83fa399c346e19e77809961e1a1e45643dffaf9c3919a4f0077912fa56a74a7c6cac565e29916c5bb742aab81",
+      "keyHex": "bb985a98a71f4497e41e7469b0fe0e1af97b77281f7dc5e84451da2c98ffff15"
+    },
+    {
+      "name": "file-key-bit-flip",
+      "base": "file-key-pgp",
+      "fileId": "oKGio6SlpqeoqaqrrK2urw",
+      "storedHex": "c1c2c3c4c5c6c7c8c9cacbcc7072b8919b6283db1e26b499403082bb5eafb72a30b35fce25fcd1fa555df12c5d248be3c9a772e17cbecdc7bcd59429bd3451a83fa399c346e19e77809961e1a1e45643dffaf9c3919a4f0077912fa56a74a7c6cac565e29916c5bb742aab81"
+    },
+    {
+      "name": "file-key-fileId-swapped",
+      "base": "file-key-pgp",
+      "fileId": "sLGys7S1tre4ubq7vL2-vw",
+      "storedHex": "c1c2c3c4c5c6c7c8c9cacbcc7072b8919b6283db1f26b499403082bb5eafb72a30b35fce25fcd1fa555df12c5d248be3c9a772e17cbecdc7bcd59429bd3451a83fa399c346e19e77809961e1a1e45643dffaf9c3919a4f0077912fa56a74a7c6cac565e29916c5bb742aab81"
+    },
+    {
+      "name": "file-key-id-swapped",
+      "base": "file-key-pgp",
+      "fileId": "oKGio6SlpqeoqaqrrK2urw",
+      "id": "AAECAwQFBgcICQoLDA0ODw",
+      "storedHex": "c1c2c3c4c5c6c7c8c9cacbcc7072b8919b6283db1f26b499403082bb5eafb72a30b35fce25fcd1fa555df12c5d248be3c9a772e17cbecdc7bcd59429bd3451a83fa399c346e19e77809961e1a1e45643dffaf9c3919a4f0077912fa56a74a7c6cac565e29916c5bb742aab81"
     }
   ],
   "consume": [
