@@ -385,3 +385,34 @@ test('path-only requests cannot poll or burn a passphrase-protected secret', asy
   await recipient.getByRole('button', { name: 'Decrypt', exact: true }).click();
   await expect(recipient.getByLabel('Secret', { exact: true })).toHaveValue('protected capability');
 });
+
+test('an altered link explains the ambiguity without consuming a retrieval', async ({
+  page,
+  request,
+  freshPage,
+}) => {
+  const c = await createViaUi(page, { text: 'unaltered secret' });
+  const altered = new URL(c.shareUrl);
+  const key = Buffer.from(altered.hash.slice(1), 'base64url');
+  key[0]! ^= 1;
+  altered.hash = key.toString('base64url');
+  const recipient = await freshPage();
+  const methods: string[] = [];
+  recipient.on('request', (r) => {
+    if (new URL(r.url()).pathname.startsWith(`/api/secrets/${c.id}`)) methods.push(r.method());
+  });
+  const availability = recipient.waitForResponse(
+    (r) => new URL(r.url()).pathname === `/api/secrets/${c.id}`,
+  );
+  await recipient.goto(local(altered.href), { waitUntil: 'domcontentloaded' });
+  expect((await availability).status()).toBe(404);
+  await expect(
+    recipient.getByRole('heading', { name: 'This secret is not available.' }),
+  ).toBeVisible();
+  await expect(
+    recipient.getByText(/the link you received was altered or is incomplete/),
+  ).toBeVisible();
+  await expect(recipient.getByText(/resend the link in full or create a new one/)).toBeVisible();
+  expect(methods).toEqual(['GET']);
+  expect((await status(request, c)).retrievalCount).toBe(0);
+});

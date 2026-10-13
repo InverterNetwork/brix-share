@@ -468,8 +468,9 @@ export function RevealScreen({
           </HeroIcon>
           <PageTitle>This secret is not available.</PageTitle>
           <p class="text-fg-3">
-            It does not exist or can no longer be opened: it was already retrieved, it expired, or
-            the sender deleted it. Ask the sender for a new link.
+            It does not exist, can no longer be opened (already retrieved, expired, or deleted by
+            the sender), or the link you received was altered or is incomplete. Ask the sender to
+            resend the link in full or create a new one.
           </p>
         </Centered>
       );
