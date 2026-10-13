@@ -88,7 +88,7 @@ If it refuses because the local build differs from the release manifest: do not 
 
 1. At the parent domain's DNS provider, create NS records for the service domain with the four name servers from the zone stack's `NameServers` output.
 2. Wait until `dig NS <domain> +short` returns them (and `dig @8.8.8.8` too).
-3. Set `customDomain: true` in the stage config, save it, then deploy infra. The edge stack gets the ACM certificate (validated through the delegated zone), the main stack the alias, TLS 1.2 policy and A/AAAA records; the viewer-request function redirects the default CloudFront domain (and any other noncanonical host) with 301 to the HTTPS custom domain before SPA rewriting. Original share and manage paths are preserved, and browsers inherit the fragment. Files bucket CORS allows only the custom origin. The initial smoke-test mode keeps the CloudFront origin usable.
+3. Set `customDomain: true` in the stage config, save it, then deploy infra. The edge stack gets the ACM certificate (validated through the delegated zone), the main stack the alias, TLS 1.2 policy and A/AAAA records; viewer-request functions on both the static and API behaviors redirect the default CloudFront domain (and any other noncanonical host) with 301 to the HTTPS custom domain before SPA rewriting on the static behavior; the API function never rewrites URIs. Original share and manage paths are preserved, and browsers inherit the fragment. Files bucket CORS allows only the custom origin. The initial smoke-test mode keeps the CloudFront origin usable.
 4. Verify against the custom domain. The monitor switches to it on its own (`customDomain` wins over `siteUrl`).
 
 Deploying the domain before the delegation works hangs on certificate validation; keep the order.
@@ -102,7 +102,7 @@ AWS_PROFILE=<prod-readonly-profile> node scripts/scrub-logs.ts prod /tmp/brix-ve
 
 It creates 6 secrets; the WAF allows 20 creates per 5 minutes per IP, so do not run it more than three times in a row from one address.
 
-`verify-live` needs `cloudformation:DescribeStacks` in the stage region when the custom domain is enabled, to read the public `DistributionDomainName` output and check its 301 redirects on root, share and manage paths. It never follows those redirects when checking them.
+`verify-live` needs `cloudformation:DescribeStacks` in the stage region when the custom domain is enabled, to read the public `DistributionDomainName` output and check its 301 redirects on root, share, manage and `/api/health` paths. It never follows those redirects when checking them.
 
 `verify-live` exercises every flow against the live stage (create with real proof-of-work, reveal, N views, release later, passphrase, manage, delete, tombstone, link-preview GET, headers, OAC body-hash enforcement, served files equal the deployed manifest). `scrub-logs` searches the Lambda log groups for every id, token, ciphertext fragment and presigned URL marker from that run; any hit is a failure.
 

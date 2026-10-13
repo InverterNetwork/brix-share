@@ -48,16 +48,23 @@ export interface BrixShareStackProps extends StackProps {
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const entry = (rel: string) => fileURLToPath(new URL(`../../${rel}`, import.meta.url));
 
-/** SPA routing: extensionless paths serve index.html. Only on the static behavior, never on /api. */
-const SPA_REWRITE = (domainName: string | null) => `function handler(event) {
+/** Both behaviors share the canonical redirect; only the static variant rewrites SPA paths. */
+const VIEWER_REQUEST = (
+  domainName: string | null,
+  rewriteSpa: boolean,
+) => `function handler(event) {
   var r = event.request;
   var canonical = ${JSON.stringify(domainName)};
   if (canonical && (!r.headers.host || r.headers.host.value.toLowerCase() !== canonical)) {
     return { statusCode: 301, statusDescription: 'Moved Permanently',
       headers: { location: { value: 'https://' + canonical + r.uri } } };
   }
-  var last = r.uri.substring(r.uri.lastIndexOf('/') + 1);
-  if (last.indexOf('.') === -1) { r.uri = '/index.html'; }
+  ${
+    rewriteSpa
+      ? `var last = r.uri.substring(r.uri.lastIndexOf('/') + 1);
+  if (last.indexOf('.') === -1) { r.uri = '/index.html'; }`
+      : ''
+  }
   return r;
 }`;
 
@@ -365,6 +372,19 @@ export class BrixShareStack extends Stack {
       headerBehavior: cloudfront.CacheHeaderBehavior.none(),
     });
 
+    const spaRewrite = new cloudfront.Function(this, 'SpaRewrite', {
+      code: cloudfront.FunctionCode.fromInline(
+        VIEWER_REQUEST(stage.customDomain ? stage.domainName : null, true),
+      ),
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+    });
+    const apiRedirect = stage.customDomain
+      ? new cloudfront.Function(this, 'ApiCanonicalRedirect', {
+          code: cloudfront.FunctionCode.fromInline(VIEWER_REQUEST(stage.domainName, false)),
+          runtime: cloudfront.FunctionRuntime.JS_2_0,
+        })
+      : undefined;
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       comment: `Brix Share ${stage.name}`,
       ...(props.domain
@@ -393,12 +413,7 @@ export class BrixShareStack extends Stack {
         functionAssociations: [
           {
             eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
-            function: new cloudfront.Function(this, 'SpaRewrite', {
-              code: cloudfront.FunctionCode.fromInline(
-                SPA_REWRITE(stage.customDomain ? stage.domainName : null),
-              ),
-              runtime: cloudfront.FunctionRuntime.JS_2_0,
-            }),
+            function: spaRewrite,
           },
         ],
       },
@@ -411,6 +426,13 @@ export class BrixShareStack extends Stack {
           originRequestPolicy: apiOriginRequest,
           responseHeadersPolicy: headersPolicy,
           compress: true,
+          ...(apiRedirect
+            ? {
+                functionAssociations: [
+                  { eventType: cloudfront.FunctionEventType.VIEWER_REQUEST, function: apiRedirect },
+                ],
+              }
+            : {}),
         },
       },
     });

@@ -136,13 +136,13 @@ export async function checkDelivery(
   return failures;
 }
 
-/** Static routes on the default distribution domain must redirect before the SPA rewrite. */
+/** Static and API routes on the default distribution domain must redirect to the canonical host. */
 export async function checkCanonicalRedirect(
   distributionBase: string,
   canonicalBase: string,
 ): Promise<string[]> {
   const failures: string[] = [];
-  for (const path of ['/', `/s/${randomId()}`, `/m/${randomId()}`]) {
+  for (const path of ['/', `/s/${randomId()}`, `/m/${randomId()}`, '/api/health']) {
     const { res } = await get(distributionBase, path);
     const expected = new URL(path, canonicalBase).href;
     if (res.status !== 301 || res.headers.get('location') !== expected)

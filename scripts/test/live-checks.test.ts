@@ -139,11 +139,13 @@ describe('checkDelivery', () => {
 });
 
 describe('canonical redirects', () => {
-  it('checks the root and original share/manage paths without following redirects', async () => {
+  it('checks root, share/manage and API paths without following redirects', async () => {
     const { checkCanonicalRedirect } = await import('../live-checks.ts');
-    server = createServer((req, res) =>
-      res.writeHead(301, { location: `https://share.example.com${req.url}` }).end(),
-    );
+    const requested: string[] = [];
+    server = createServer((req, res) => {
+      requested.push(req.url!);
+      res.writeHead(301, { location: `https://share.example.com${req.url}` }).end();
+    });
     await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
     expect(
       await checkCanonicalRedirect(
@@ -151,6 +153,8 @@ describe('canonical redirects', () => {
         'https://share.example.com',
       ),
     ).toEqual([]);
+    expect(requested).toHaveLength(4);
+    expect(requested).toContain('/api/health');
   });
 
   it('fails on the wrong host, rewritten paths or a non-301 response', async () => {
@@ -163,7 +167,24 @@ describe('canonical redirects', () => {
       `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
       'https://share.example.com',
     );
-    expect(failures).toHaveLength(3);
+    expect(failures).toHaveLength(4);
     expect(failures.every((f) => f.includes('got 302'))).toBe(true);
+  });
+});
+
+describe('API canonical redirect coverage', () => {
+  it('fails if only the API continues to answer on the raw domain', async () => {
+    const { checkCanonicalRedirect } = await import('../live-checks.ts');
+    server = createServer((req, res) => {
+      if (req.url === '/api/health') return void res.writeHead(200).end();
+      res.writeHead(301, { location: `https://share.example.com${req.url}` }).end();
+    });
+    await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
+    const failures = await checkCanonicalRedirect(
+      `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+      'https://share.example.com',
+    );
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatch(/^\/api\/health: distribution domain must answer 301/);
   });
 });
