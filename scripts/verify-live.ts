@@ -12,7 +12,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   b64urlEncode,
+  b64urlDecode,
   hashManageToken,
+  hashConsumeToken,
   secToIso,
   type ConsumeResponse,
   type Envelope,
@@ -20,9 +22,12 @@ import {
 import {
   checkEnvelope,
   deriveKey,
+  deriveConsumeToken,
   envelopeSalt,
   newId,
   newLinkKey,
+  newFileKey,
+  importFileKey,
   newManageToken,
   newSalt,
   openFile,
@@ -33,6 +38,7 @@ import {
 import { solvePow } from '../web/src/pow/solver.ts';
 import {
   checkDelivery,
+  checkCanonicalRedirect,
   filesOriginFromCsp,
   get,
   randomId,
@@ -50,7 +56,10 @@ if (!stage || !base) {
   process.exit(2);
 }
 
-const stages = readStageFile() as Record<string, { filesBucketSuffix: string; region: string }>;
+const stages = readStageFile() as Record<
+  string,
+  { filesBucketSuffix: string; region: string; customDomain?: boolean; domainName: string }
+>;
 if (!local && !stages[stage]) throw new Error(`unknown stage ${stage}`);
 
 const terms: string[] = [];
@@ -93,9 +102,12 @@ interface Made {
   id: string;
   kLink: Uint8Array<ArrayBuffer>;
   token: string;
+  consumeToken: string;
   passphrase: string | null;
   envelope: Envelope;
 }
+
+const consumeTokens = new Map<string, string>();
 
 async function create(opts: {
   maxViews: number | null;
@@ -106,16 +118,20 @@ async function create(opts: {
 }): Promise<Made> {
   const id = newId();
   const kLink = newLinkKey();
+  const consumeToken = await deriveConsumeToken(kLink);
+  consumeTokens.set(id, consumeToken);
   const salt = opts.passphrase ? newSalt() : null;
   const token = newManageToken();
   const key = await deriveKey(kLink, opts.passphrase ?? null, salt);
   const attachments = await Promise.all(
     (opts.files ?? []).map(async (bytes, i) => {
       const fileId = newId();
+      const kFile = newFileKey();
       return {
         fileId,
         bytes,
-        stored: await sealFile(id, fileId, key, bytes),
+        stored: await sealFile(id, fileId, await importFileKey(kFile), bytes),
+        key: b64urlEncode(kFile),
         name: `verify-${i}.bin`,
       };
     }),
@@ -132,6 +148,7 @@ async function create(opts: {
         name: a.name,
         size: a.bytes.length,
         mime: 'application/octet-stream',
+        key: a.key,
       })),
     },
   });
@@ -147,12 +164,15 @@ async function create(opts: {
       availableFrom: opts.availableIn ? secToIso(now + opts.availableIn) : null,
     },
     manageTokenHash: await hashManageToken(token),
+    consumeTokenHash: await hashConsumeToken(consumeToken),
     pow: { challenge, nonce },
     files: attachments.map((a) => ({ fileId: a.fileId, size: a.bytes.length })),
   });
   terms.push(
     id,
     token,
+    consumeToken,
+    await hashConsumeToken(consumeToken),
     b64urlEncode(kLink),
     envelope.ct.slice(0, 40),
     await hashManageToken(token),
@@ -195,10 +215,13 @@ async function create(opts: {
     });
     check(fin.status === 200, 'finalize releases the secret');
   }
-  return { id, kLink, token, passphrase: opts.passphrase ?? null, envelope };
+  return { id, kLink, token, consumeToken, passphrase: opts.passphrase ?? null, envelope };
 }
 
-const consume = (id: string) => api('POST', `/api/secrets/${id}/consume`);
+const consume = (id: string) =>
+  api('POST', `/api/secrets/${id}/consume`, undefined, {
+    'x-consume-token': consumeTokens.get(id)!,
+  });
 const status = (m: Made) =>
   api('GET', `/api/secrets/${m.id}/status`, undefined, { 'x-manage-token': m.token });
 
@@ -214,6 +237,33 @@ async function decrypts(
 }
 
 async function edgeChecks() {
+  const config = stages[stage!]!;
+  if (config.customDomain) {
+    const distributionDomain = execFileSync(
+      'aws',
+      [
+        'cloudformation',
+        'describe-stacks',
+        '--stack-name',
+        `BrixShare-${stage}`,
+        '--region',
+        config.region,
+        '--query',
+        "Stacks[0].Outputs[?OutputKey=='DistributionDomainName'].OutputValue | [0]",
+        '--output',
+        'text',
+      ],
+      { encoding: 'utf8' },
+    ).trim();
+    if (!/^[a-z0-9]+\.cloudfront\.net$/.test(distributionDomain))
+      throw new Error('missing or invalid DistributionDomainName stack output');
+    const redirectFailures = await checkCanonicalRedirect(
+      `https://${distributionDomain}`,
+      `https://${config.domainName}`,
+    );
+    check(redirectFailures.length === 0, 'distribution domain redirects to the canonical host');
+    failures.push(...redirectFailures);
+  }
   const wrongHash = await fetch(new URL(`/api/secrets/${randomId()}/consume`, base), {
     method: 'POST',
     headers: { 'user-agent': userAgent, 'x-amz-content-sha256': sha256Hex('not the body') },
@@ -270,7 +320,17 @@ async function main() {
   const preview = await get(base!, `/s/${once.id}`);
   check(preview.res.status === 200, 'share page loads without the fragment');
   // What the share page asks on load: availability, which must not count either.
-  const avail = await api('GET', `/api/secrets/${once.id}`);
+  for (const path of [`/api/secrets/${once.id}`, `/api/secrets/${once.id}/consume`]) {
+    const method = path.endsWith('/consume') ? 'POST' : 'GET';
+    check((await api(method, path)).status === 404, `${method}: missing consume token is 404`);
+    check(
+      (await api(method, path, undefined, { 'x-consume-token': newManageToken() })).status === 404,
+      `${method}: wrong consume token is 404`,
+    );
+  }
+  const avail = await api('GET', `/api/secrets/${once.id}`, undefined, {
+    'x-consume-token': once.consumeToken,
+  });
   check(
     avail.status === 200 && avail.json?.availableFrom === null,
     'availability check: 200, available now',
@@ -286,7 +346,11 @@ async function main() {
   );
   check((await consume(once.id)).status === 404, 'one-time secret: second retrieval is 404');
   check(
-    (await api('GET', `/api/secrets/${once.id}`)).status === 404,
+    (
+      await api('GET', `/api/secrets/${once.id}`, undefined, {
+        'x-consume-token': once.consumeToken,
+      })
+    ).status === 404,
     'availability check: 404 once used up',
   );
   const s1 = await status(once);
@@ -303,6 +367,7 @@ async function main() {
   // The country comes from CloudFront; a header sent by the client must not override it.
   const spoof = await api('POST', `/api/secrets/${three.id}/consume`, undefined, {
     'cloudfront-viewer-country': 'ZZ',
+    'x-consume-token': three.consumeToken,
   });
   const afterSpoof = await status(three);
   const countries = ((afterSpoof.json?.retrievals as { country: string }[] | undefined) ?? []).map(
@@ -344,8 +409,11 @@ async function main() {
     'release later: 425 before availableFrom',
   );
   check(
-    (await api('GET', `/api/secrets/${later.id}`)).json?.availableFrom ===
-      early.json?.availableFrom,
+    (
+      await api('GET', `/api/secrets/${later.id}`, undefined, {
+        'x-consume-token': later.consumeToken,
+      })
+    ).json?.availableFrom === early.json?.availableFrom,
     'availability check: reports the release time',
   );
   check(
@@ -363,11 +431,26 @@ async function main() {
   const fr = await consume(withFile.id);
   const downloads = (fr.json?.downloads ?? []) as { fileId: string; url: string }[];
   check(fr.status === 200 && downloads.length === 2, 'consume returns two download URLs');
-  const fkey = await deriveKey(withFile.kLink, null, null);
+  const textKey = await deriveKey(withFile.kLink, null, null);
+  const filePayload = await openText(
+    checkEnvelope((fr.json as unknown as ConsumeResponse).envelope, withFile.id),
+    textKey,
+  );
+  check(
+    new Set(filePayload.files.map((f) => f.key)).size === 2,
+    'attachments have independent keys',
+  );
+  terms.push(...filePayload.files.map((f) => f.key));
   const got = await Promise.all(
     downloads.map(async (d) => {
       const r = await fetch(d.url);
-      return openFile(withFile.id, d.fileId, fkey, new Uint8Array(await r.arrayBuffer()));
+      const meta = filePayload.files.find((f) => f.fileId === d.fileId)!;
+      return openFile(
+        withFile.id,
+        d.fileId,
+        await importFileKey(b64urlDecode(meta.key)),
+        new Uint8Array(await r.arrayBuffer()),
+      );
     }),
   );
   check(

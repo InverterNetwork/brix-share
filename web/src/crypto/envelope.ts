@@ -5,6 +5,7 @@
 import {
   EnvelopeSchema,
   HKDF_INFO_PASSPHRASE,
+  HKDF_INFO_CONSUME,
   ID_BYTES,
   IV_BYTES,
   KEY_BYTES,
@@ -33,6 +34,7 @@ export function randomBytes(n: number): Uint8Array<ArrayBuffer> {
 
 export const newId = () => b64urlEncode(randomBytes(ID_BYTES));
 export const newLinkKey = () => randomBytes(KEY_BYTES);
+export const newFileKey = () => randomBytes(KEY_BYTES);
 export const newManageToken = () => b64urlEncode(randomBytes(MANAGE_TOKEN_BYTES));
 export const newSalt = () => randomBytes(SALT_BYTES);
 
@@ -50,6 +52,18 @@ export class ProtocolError extends Error {
     super(message);
     this.name = 'ProtocolError';
   }
+}
+
+/** Link capability, available before any passphrase prompt; never grants decryption or management. */
+export async function deriveConsumeToken(kLink: Uint8Array<ArrayBuffer>): Promise<string> {
+  if (kLink.length !== KEY_BYTES) throw new ProtocolError('link key must be 32 bytes');
+  const ikm = await subtle().importKey('raw', kLink, 'HKDF', false, ['deriveBits']);
+  const token = await subtle().deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: enc.encode(HKDF_INFO_CONSUME) },
+    ikm,
+    256,
+  );
+  return b64urlEncode(new Uint8Array(token));
 }
 
 /** Raw K_data bytes. Exposed for the known-answer tests; app code uses `deriveKey`. */
@@ -198,6 +212,12 @@ export async function openText(envelope: Envelope, key: CryptoKey): Promise<Payl
 /** Envelope salt as bytes, or null. */
 export function envelopeSalt(envelope: Envelope): Uint8Array<ArrayBuffer> | null {
   return envelope.salt === null ? null : b64urlDecode(envelope.salt);
+}
+
+/** Non-extractable AES-256-GCM key for one attachment, held only in memory. */
+export async function importFileKey(raw: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
+  if (raw.length !== KEY_BYTES) throw new ProtocolError('file key must be 32 bytes');
+  return subtle().importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
 /** Encrypts one attachment: stored bytes are iv || ciphertext || tag. */

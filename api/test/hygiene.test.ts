@@ -125,13 +125,15 @@ describe('log hygiene', () => {
           Object.create(Object.getPrototypeOf(api.repo) as object) as typeof api.repo,
           api.repo,
           {
-            consume: () => Promise.reject(new Error(`boom ${s.token} ${s.body.envelope.ct}`)),
+            consume: () =>
+              Promise.reject(new Error(`boom ${s.token} ${s.consumeToken} ${s.body.envelope.ct}`)),
           },
         ),
       };
       const r = await handle(broken, {
         rawPath: `/api/secrets/${s.id}/consume`,
         requestContext: { http: { method: 'POST' } },
+        headers: { 'x-consume-token': s.consumeToken },
       });
       expect(r.statusCode).toBe(500);
       expect(r.body).not.toContain(s.token);
@@ -142,6 +144,8 @@ describe('log hygiene', () => {
       for (const sec of secrets) {
         for (const needle of [
           sec.token,
+          sec.consumeToken,
+          sec.body.consumeTokenHash,
           sec.id,
           sec.body.envelope.ct,
           sec.body.manageTokenHash,

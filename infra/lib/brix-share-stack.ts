@@ -29,6 +29,7 @@ import type { Construct } from 'constructs';
 import {
   DEFAULT_POW_DIFFICULTY,
   MANAGE_TOKEN_HEADER,
+  CONSUME_TOKEN_HEADER,
   PERMISSIONS_POLICY,
   HSTS_MAX_AGE_SEC,
   contentSecurityPolicy,
@@ -47,11 +48,23 @@ export interface BrixShareStackProps extends StackProps {
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const entry = (rel: string) => fileURLToPath(new URL(`../../${rel}`, import.meta.url));
 
-/** SPA routing: extensionless paths serve index.html. Only on the static behavior, never on /api. */
-const SPA_REWRITE = `function handler(event) {
+/** Both behaviors share the canonical redirect; only the static variant rewrites SPA paths. */
+const VIEWER_REQUEST = (
+  domainName: string | null,
+  rewriteSpa: boolean,
+) => `function handler(event) {
   var r = event.request;
-  var last = r.uri.substring(r.uri.lastIndexOf('/') + 1);
-  if (last.indexOf('.') === -1) { r.uri = '/index.html'; }
+  var canonical = ${JSON.stringify(domainName)};
+  if (canonical && (!r.headers.host || r.headers.host.value.toLowerCase() !== canonical)) {
+    return { statusCode: 301, statusDescription: 'Moved Permanently',
+      headers: { location: { value: 'https://' + canonical + r.uri } } };
+  }
+  ${
+    rewriteSpa
+      ? `var last = r.uri.substring(r.uri.lastIndexOf('/') + 1);
+  if (last.indexOf('.') === -1) { r.uri = '/index.html'; }`
+      : ''
+  }
   return r;
 }`;
 
@@ -339,12 +352,38 @@ export class BrixShareStack extends Stack {
       comment: 'Brix Share API: only the headers the API reads',
       headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
         MANAGE_TOKEN_HEADER,
+        CONSUME_TOKEN_HEADER,
         'content-type',
         'CloudFront-Viewer-Country',
       ),
       queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.none(),
       cookieBehavior: cloudfront.OriginRequestCookieBehavior.none(),
     });
+
+    // Honor origin no-store while retaining the managed policy's asset TTLs and compression.
+    const staticCache = new cloudfront.CachePolicy(this, 'StaticCache', {
+      minTtl: Duration.seconds(0),
+      defaultTtl: Duration.days(1),
+      maxTtl: Duration.days(365),
+      enableAcceptEncodingGzip: true,
+      enableAcceptEncodingBrotli: true,
+      cookieBehavior: cloudfront.CacheCookieBehavior.none(),
+      queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
+      headerBehavior: cloudfront.CacheHeaderBehavior.none(),
+    });
+
+    const spaRewrite = new cloudfront.Function(this, 'SpaRewrite', {
+      code: cloudfront.FunctionCode.fromInline(
+        VIEWER_REQUEST(stage.customDomain ? stage.domainName : null, true),
+      ),
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+    });
+    const apiRedirect = stage.customDomain
+      ? new cloudfront.Function(this, 'ApiCanonicalRedirect', {
+          code: cloudfront.FunctionCode.fromInline(VIEWER_REQUEST(stage.domainName, false)),
+          runtime: cloudfront.FunctionRuntime.JS_2_0,
+        })
+      : undefined;
 
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       comment: `Brix Share ${stage.name}`,
@@ -368,16 +407,13 @@ export class BrixShareStack extends Stack {
         origin: origins.S3BucketOrigin.withOriginAccessControl(staticBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        cachePolicy: staticCache,
         responseHeadersPolicy: headersPolicy,
         compress: true,
         functionAssociations: [
           {
             eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
-            function: new cloudfront.Function(this, 'SpaRewrite', {
-              code: cloudfront.FunctionCode.fromInline(SPA_REWRITE),
-              runtime: cloudfront.FunctionRuntime.JS_2_0,
-            }),
+            function: spaRewrite,
           },
         ],
       },
@@ -390,6 +426,13 @@ export class BrixShareStack extends Stack {
           originRequestPolicy: apiOriginRequest,
           responseHeadersPolicy: headersPolicy,
           compress: true,
+          ...(apiRedirect
+            ? {
+                functionAssociations: [
+                  { eventType: cloudfront.FunctionEventType.VIEWER_REQUEST, function: apiRedirect },
+                ],
+              }
+            : {}),
         },
       },
     });
@@ -457,10 +500,9 @@ export class BrixShareStack extends Stack {
 
     // Uploads and downloads go from the site straight to the files bucket.
     filesBucket.addCorsRule({
-      allowedOrigins: [
-        `https://${distribution.distributionDomainName}`,
-        ...(props.domain ? [`https://${stage.domainName}`] : []),
-      ],
+      allowedOrigins: stage.customDomain
+        ? [`https://${stage.domainName}`]
+        : [`https://${distribution.distributionDomainName}`],
       allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET],
       allowedHeaders: ['content-type'],
       maxAge: 300,
@@ -670,6 +712,7 @@ export class BrixShareStack extends Stack {
       });
     }
 
+    new CfnOutput(this, 'DistributionDomainName', { value: distribution.distributionDomainName });
     new CfnOutput(this, 'DistributionId', { value: distribution.distributionId });
     new CfnOutput(this, 'SiteUrl', {
       value: props.domain

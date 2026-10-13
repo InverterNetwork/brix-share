@@ -87,6 +87,8 @@ export async function checkDelivery(
     const { res, body } = path === '/' ? root : await get(base, path);
     if (res.status !== 200) failures.push(`${path}: status ${res.status}`);
     checkHeaders(failures, path, res, filesOrigin);
+    if (res.headers.has('age'))
+      failures.push(`${path}: Age header present (${res.headers.get('age')})`);
     if (res.headers.get('cache-control') !== 'no-store')
       failures.push(`${path}: cache-control ${res.headers.get('cache-control')}`);
     if (res.headers.get('content-type') !== contentType('/index.html'))
@@ -130,6 +132,23 @@ export async function checkDelivery(
         failures.push(`${path}: cache-control ${res.headers.get('cache-control')}`);
       checkHeaders(failures, path, res, filesOrigin);
     }
+  }
+  return failures;
+}
+
+/** Static and API routes on the default distribution domain must redirect to the canonical host. */
+export async function checkCanonicalRedirect(
+  distributionBase: string,
+  canonicalBase: string,
+): Promise<string[]> {
+  const failures: string[] = [];
+  for (const path of ['/', `/s/${randomId()}`, `/m/${randomId()}`, '/api/health']) {
+    const { res } = await get(distributionBase, path);
+    const expected = new URL(path, canonicalBase).href;
+    if (res.status !== 301 || res.headers.get('location') !== expected)
+      failures.push(
+        `${path}: distribution domain must answer 301 to ${expected}, got ${res.status} and ${JSON.stringify(res.headers.get('location'))}`,
+      );
   }
   return failures;
 }

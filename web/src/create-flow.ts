@@ -1,18 +1,23 @@
 import {
   MAX_FILES,
+  KEY_BYTES,
   MAX_PAYLOAD_BYTES,
   MAX_TEXT_BYTES,
   MAX_TOTAL_FILE_BYTES,
   b64urlEncode,
   hashManageToken,
+  hashConsumeToken,
   type CreateResponse,
   type Payload,
 } from '@brix-share/shared';
 import { createSecret, finalizeSecret, uploadFile, type CreateHooks } from './api.ts';
 import {
   deriveKey,
+  deriveConsumeToken,
   newId,
   newLinkKey,
+  newFileKey,
+  importFileKey,
   newManageToken,
   newSalt,
   sealFile,
@@ -38,11 +43,13 @@ export function textBytes(text: string): number {
   return enc.encode(text).length;
 }
 
+type FileMetadata = Omit<Payload['files'][number], 'key'>;
+
 /** Metadata of an attachment as it goes into the encrypted payload (names and types never leave it). */
 export function fileMeta(
   fileId: string,
   file: { name: string; size: number; type: string },
-): Payload['files'][number] {
+): FileMetadata {
   return {
     fileId,
     name: file.name.slice(0, 255),
@@ -55,9 +62,14 @@ export function fileMeta(
 export function payloadBytes(
   title: string | null,
   text: string,
-  files: Payload['files'] = [],
+  files: FileMetadata[] = [],
 ): number {
-  return enc.encode(JSON.stringify({ title, text, files })).length;
+  // The form has no encryption keys yet; account for their fixed encoded length before encryption.
+  const withKeys = files.map((file) => ({
+    ...file,
+    key: ' '.repeat(Math.ceil((KEY_BYTES * 4) / 3)),
+  }));
+  return enc.encode(JSON.stringify({ title, text, files: withKeys })).length;
 }
 
 export function checkFiles(files: { size: number }[]): string | null {
@@ -70,7 +82,7 @@ export function checkFiles(files: { size: number }[]): string | null {
 export function checkContent(
   title: string | null,
   text: string,
-  files: Payload['files'] = [],
+  files: FileMetadata[] = [],
 ): string | null {
   if (text.length === 0 && files.length === 0)
     return 'Write or paste the secret, or attach a file.';
@@ -119,10 +131,14 @@ export async function createFlow(
     (input.files ?? []).map(async (file) => {
       const fileId = newId();
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const stored = await sealFile(id, fileId, key, bytes);
+      const kFile = newFileKey();
+      const stored = await sealFile(id, fileId, await importFileKey(kFile), bytes);
       // The size of what was read, not File.size: the file may have changed on disk since it was picked.
       return {
-        meta: fileMeta(fileId, { name: file.name, type: file.type, size: bytes.length }),
+        meta: {
+          ...fileMeta(fileId, { name: file.name, type: file.type, size: bytes.length }),
+          key: b64urlEncode(kFile),
+        },
         stored,
       };
     }),
@@ -134,12 +150,14 @@ export async function createFlow(
     payload: { title: input.title, text: input.text, files: attachments.map((a) => a.meta) },
   });
   const manageTokenHash = await hashManageToken(manageToken);
+  const consumeTokenHash = await hashConsumeToken(await deriveConsumeToken(kLink));
 
   const response = await createSecret(
     (now) => ({
       envelope,
       policy: policyOf(input.form, now),
       manageTokenHash,
+      consumeTokenHash,
       files: attachments.map((a) => ({ fileId: a.meta.fileId, size: a.meta.size })),
     }),
     hooks,

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { DAY, b64urlEncode, hashManageToken, secToIso } from '@brix-share/shared';
+import { DAY, b64urlEncode, hashManageToken, hashConsumeToken, secToIso } from '@brix-share/shared';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { solve } from '../src/pow.ts';
 import { T0, makeApi } from './harness.ts';
@@ -32,6 +32,7 @@ async function createWithFiles(sizes: number[], maxViews: number | null = 1) {
       },
       policy: { maxViews, expiresAt: secToIso(api.clock.now + DAY), availableFrom: null },
       manageTokenHash: await hashManageToken(token),
+      consumeTokenHash: await hashConsumeToken(api.consumeToken),
       pow: { challenge, nonce: solve(challenge, ch.json!.difficulty as number) },
       files: fileIds.map((fileId, i) => ({ fileId, size: sizes[i]! })),
     },
@@ -71,6 +72,7 @@ describe('files', () => {
         },
         policy: { maxViews: 1, expiresAt: secToIso(api.clock.now + DAY), availableFrom: null },
         manageTokenHash: await hashManageToken(token),
+        consumeTokenHash: await hashConsumeToken(api.consumeToken),
         pow: { challenge, nonce: solve(challenge, ch.json!.difficulty as number) },
         files: [
           { fileId: f2, size: 20 },

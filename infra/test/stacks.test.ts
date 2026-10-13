@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { Match } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { RATE_LIMITS } from '../lib/waf.ts';
@@ -43,7 +44,7 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
         CorsRules: [
           {
             AllowedOrigins: stage.customDomain
-              ? [Match.objectLike({ 'Fn::Join': Match.anyValue() }), `https://${stage.domainName}`]
+              ? [`https://${stage.domainName}`]
               : [
                   Match.objectLike({
                     'Fn::Join': [
@@ -221,9 +222,134 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
             PathPattern: '/api/*',
             ViewerProtocolPolicy: 'https-only',
             CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
-            FunctionAssociations: Match.absent(),
+            FunctionAssociations: stage.customDomain
+              ? [Match.objectLike({ EventType: 'viewer-request' })]
+              : Match.absent(),
           }),
         ],
+      }),
+    });
+  });
+
+  it('viewer function redirects alternate hosts before rewriting and leaves the smoke-test host usable', () => {
+    const functions = Object.entries(
+      mainT.toJSON().Resources as Record<
+        string,
+        {
+          Type: string;
+          Properties: { FunctionCode: string };
+        }
+      >,
+    ).filter(([, r]) => r.Type === 'AWS::CloudFront::Function');
+    const [spaId, spa] = functions.find(([id]) => id.startsWith('SpaRewrite'))!;
+    const api = functions.find(([id]) => id.startsWith('ApiCanonicalRedirect'));
+    const code = spa.Properties.FunctionCode;
+    expect(functions).toHaveLength(stage.customDomain ? 2 : 1);
+    mainT.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        DefaultCacheBehavior: Match.objectLike({
+          FunctionAssociations: [
+            { EventType: 'viewer-request', FunctionARN: { 'Fn::GetAtt': [spaId, 'FunctionARN'] } },
+          ],
+        }),
+        CacheBehaviors: [
+          Match.objectLike({
+            PathPattern: '/api/*',
+            FunctionAssociations: stage.customDomain
+              ? [
+                  {
+                    EventType: 'viewer-request',
+                    FunctionARN: { 'Fn::GetAtt': [api![0], 'FunctionARN'] },
+                  },
+                ]
+              : Match.absent(),
+          }),
+        ],
+      }),
+    });
+    for (const host of [stage.domainName, 'distribution.cloudfront.net', 'other.example.com']) {
+      for (const uri of [
+        '/',
+        '/s/AAAAAAAAAAAAAAAAAAAAAA',
+        '/m/AAAAAAAAAAAAAAAAAAAAAA',
+        '/assets/app-hash.js',
+      ]) {
+        const request = { uri, headers: { host: { value: host } } };
+        const result = runInNewContext(`${code}; handler(event)`, {
+          event: { request },
+        }) as unknown;
+        if (stage.customDomain && host !== stage.domainName) {
+          expect(result).toEqual({
+            statusCode: 301,
+            statusDescription: 'Moved Permanently',
+            headers: { location: { value: `https://${stage.domainName}${uri}` } },
+          });
+        } else {
+          expect(result).toEqual({
+            ...request,
+            uri: uri.startsWith('/assets/') ? uri : '/index.html',
+          });
+        }
+      }
+    }
+  });
+
+  it('API viewer requests redirect alternate hosts and never rewrite canonical API paths', () => {
+    if (!stage.customDomain) return;
+    const resources = mainT.toJSON().Resources as Record<
+      string,
+      { Properties: { FunctionCode: string } }
+    >;
+    const code = Object.entries(resources).find(([id]) => id.startsWith('ApiCanonicalRedirect'))![1]
+      .Properties.FunctionCode;
+    for (const host of [stage.domainName, 'distribution.cloudfront.net']) {
+      for (const uri of [
+        '/api/health',
+        '/api/challenge',
+        '/api/secrets/AAAAAAAAAAAAAAAAAAAAAA/consume',
+      ]) {
+        for (const method of ['GET', 'POST', 'DELETE']) {
+          const request = { uri, method, headers: { host: { value: host } }, querystring: {} };
+          const result = runInNewContext(`${code}; handler(event)`, {
+            event: { request },
+          }) as unknown;
+          expect(result).toEqual(
+            host === stage.domainName
+              ? request
+              : {
+                  statusCode: 301,
+                  statusDescription: 'Moved Permanently',
+                  headers: { location: { value: `https://${stage.domainName}${uri}` } },
+                },
+          );
+          expect(request.uri).toBe(uri);
+        }
+      }
+    }
+  });
+
+  it('static cache policy honors no-store while retaining asset caching and compression', () => {
+    mainT.hasResourceProperties('AWS::CloudFront::CachePolicy', {
+      CachePolicyConfig: Match.objectLike({
+        MinTTL: 0,
+        DefaultTTL: 86400,
+        MaxTTL: 31536000,
+        ParametersInCacheKeyAndForwardedToOrigin: {
+          EnableAcceptEncodingGzip: true,
+          EnableAcceptEncodingBrotli: true,
+          CookiesConfig: { CookieBehavior: 'none' },
+          HeadersConfig: { HeaderBehavior: 'none' },
+          QueryStringsConfig: { QueryStringBehavior: 'none' },
+        },
+      }),
+    });
+    const resources = mainT.toJSON().Resources as Record<string, { Type: string }>;
+    const id = Object.entries(resources).find(
+      ([, r]) => r.Type === 'AWS::CloudFront::CachePolicy',
+    )![0];
+    mainT.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        DefaultCacheBehavior: Match.objectLike({ CachePolicyId: { Ref: id } }),
       }),
     });
   });
@@ -233,7 +359,12 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
       OriginRequestPolicyConfig: Match.objectLike({
         HeadersConfig: {
           HeaderBehavior: 'whitelist',
-          Headers: ['x-manage-token', 'content-type', 'CloudFront-Viewer-Country'],
+          Headers: [
+            'x-manage-token',
+            'x-consume-token',
+            'content-type',
+            'CloudFront-Viewer-Country',
+          ],
         },
         QueryStringsConfig: { QueryStringBehavior: 'none' },
         CookiesConfig: { CookieBehavior: 'none' },

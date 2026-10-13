@@ -88,7 +88,7 @@ If it refuses because the local build differs from the release manifest: do not 
 
 1. At the parent domain's DNS provider, create NS records for the service domain with the four name servers from the zone stack's `NameServers` output.
 2. Wait until `dig NS <domain> +short` returns them (and `dig @8.8.8.8` too).
-3. Set `customDomain: true` in the stage config, save it, then deploy infra. The edge stack gets the ACM certificate (validated through the delegated zone), the main stack the alias, TLS 1.2 policy and A/AAAA records; the files bucket CORS allows both origins.
+3. Set `customDomain: true` in the stage config, save it, then deploy infra. The edge stack gets the ACM certificate (validated through the delegated zone), the main stack the alias, TLS 1.2 policy and A/AAAA records; viewer-request functions on both the static and API behaviors redirect the default CloudFront domain (and any other noncanonical host) with 301 to the HTTPS custom domain before SPA rewriting on the static behavior; the API function never rewrites URIs. Original share and manage paths are preserved, and browsers inherit the fragment. Files bucket CORS allows only the custom origin. The initial smoke-test mode keeps the CloudFront origin usable.
 4. Verify against the custom domain. The monitor switches to it on its own (`customDomain` wins over `siteUrl`).
 
 Deploying the domain before the delegation works hangs on certificate validation; keep the order.
@@ -101,6 +101,8 @@ AWS_PROFILE=<prod-readonly-profile> node scripts/scrub-logs.ts prod /tmp/brix-ve
 ```
 
 It creates 6 secrets; the WAF allows 20 creates per 5 minutes per IP, so do not run it more than three times in a row from one address.
+
+`verify-live` needs `cloudformation:DescribeStacks` in the stage region when the custom domain is enabled, to read the public `DistributionDomainName` output and check its 301 redirects on root, share, manage and `/api/health` paths. It never follows those redirects when checking them.
 
 `verify-live` exercises every flow against the live stage (create with real proof-of-work, reveal, N views, release later, passphrase, manage, delete, tombstone, link-preview GET, headers, OAC body-hash enforcement, served files equal the deployed manifest). `scrub-logs` searches the Lambda log groups for every id, token, ciphertext fragment and presigned URL marker from that run; any hit is a failure.
 
@@ -165,12 +167,27 @@ Afterwards the share link shows "This secret is not available" and the manage li
 
 Removes every secret, tombstone and file of a stage:
 
-1. Breaker off (`createEnabled=false`).
-2. Disable deletion protection on the table, then delete it: `aws dynamodb update-table --table-name <table> --no-deletion-protection-enabled` and `aws dynamodb delete-table --table-name <table>`.
-3. Empty the files bucket: `aws s3 rm s3://<files-bucket> --recursive`.
-4. Redeploy infra (recreates the table), breaker back on.
+1. Disable creation: `aws ssm put-parameter --name /brix-share/<stage>/createEnabled --value false --overwrite`. Wait at least 90 seconds for the 60-second parameter cache and in-flight API calls to drain.
+2. Delete every table item, including tombstones and proof-of-work records, keeping the managed table, its TTL and indexes intact. The AWS CLI paginates the scan automatically. Run in Bash with `jq` installed, substituting the stack's table name:
 
-Table and bucket names are stack outputs (`TableName`, `FilesBucketName`). This is destructive and irreversible; it needs an admin session and should be a deliberate human decision.
+```sh
+set -euo pipefail
+aws dynamodb scan --table-name <table> --projection-expression pk --consistent-read --output json |
+  jq -c '.Items[]' |
+  while IFS= read -r key; do
+    aws dynamodb delete-item --table-name <table> --key "$key"
+  done
+aws dynamodb scan --table-name <table> --select COUNT --consistent-read --query Count --output text
+```
+
+Every reported count must be zero; repeat the deletion if anything remains. A failed command aborts the purge; keep the breaker off until it is resolved.
+
+3. Empty the files bucket: `aws s3 rm s3://<files-bucket> --recursive`; `aws s3 ls s3://<files-bucket> --recursive` must show no objects.
+4. Deploy infra/API and the web app from the release tag, then re-enable creation with `aws ssm put-parameter --name /brix-share/<stage>/createEnabled --value true --overwrite`. Wait at least 60 seconds before verification. Keep the breaker off throughout both deployments.
+
+Table and bucket names are stack outputs (`TableName`, `FilesBucketName`). This is destructive and irreversible; it needs an admin session and should be a deliberate human decision. Do not delete the table out of band: CloudFormation does not recreate an unchanged missing resource on a normal deploy.
+
+For v1.5.0, run this purge before deployment: consume tokens and per-file keys are mandatory, and secrets created before the release stop working. There are no token-less or keyless compatibility paths.
 
 ### Suspected tampering with the frontend
 

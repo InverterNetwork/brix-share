@@ -100,7 +100,7 @@ async function serveApi(deps: Deps, req: IncomingMessage, res: ServerResponse, p
     }
   }
   const headers: Record<string, string> = {};
-  for (const name of ['x-manage-token', 'content-type']) {
+  for (const name of ['x-manage-token', 'x-consume-token', 'content-type']) {
     const v = req.headers[name];
     if (typeof v === 'string') headers[name] = v;
   }
