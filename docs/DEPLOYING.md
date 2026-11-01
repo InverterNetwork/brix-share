@@ -20,27 +20,42 @@ export AWS_PROFILE=<prod-admin-profile>
 gh auth status          # deploy-web sets a repository variable, which needs admin rights
 ```
 
-### 1. Infrastructure and API
+### 1. Release and purge
+
+From the reviewed commit on main:
 
 ```sh
 git checkout main && git pull
+git tag vX.Y.Z && git push origin vX.Y.Z   # CI builds twice and publishes the attested manifest
+git checkout vX.Y.Z
+```
+
+For v1.5.0, run the [full purge](RUNBOOK.md#full-purge-fastest-complete-redaction) before deploying. Keep creation disabled until both infra/API and the web build are deployed. Old secrets are incompatible with the mandatory consume token and per-file keys. The purge retains the managed table.
+
+### 2. Infrastructure and API
+
+From the tagged commit:
+
+```sh
 scripts/deploy-infra.sh prod
 ```
 
 The script refuses a dirty tree or a commit that is not on `origin/main` (the Lambda code is bundled from your checkout), shows `cdk diff`, asks, deploys zone, edge and main in that order, and records the deployed commit in the repository variable `DEPLOYED_INFRA_PROD`.
 
-### 2. Web app
+### 3. Web app
+
+After CI publishes the release manifest:
 
 ```sh
-git tag vX.Y.Z && git push origin vX.Y.Z   # the release workflow builds twice and publishes manifest.json
-git checkout vX.Y.Z
 node scripts/deploy-web.ts prod vX.Y.Z --dry-run
 node scripts/deploy-web.ts prod vX.Y.Z
 ```
 
 `deploy-web.ts` rebuilds locally and refuses to deploy unless every file equals the release manifest CI published. It then assumes the web deploy role (the only principal allowed to write the site), uploads assets before `index.html` with explicit types and caching, invalidates the cache and records the release in `DEPLOYED_PROD` for the monitor.
 
-### 3. Verify
+### 4. Verify
+
+If creation was disabled for the purge, re-enable it with `aws ssm put-parameter --name /brix-share/prod/createEnabled --value true --overwrite` and wait at least 60 seconds before verification.
 
 ```sh
 node scripts/verify-live.ts prod <site url> vX.Y.Z

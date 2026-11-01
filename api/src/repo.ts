@@ -14,6 +14,8 @@ import {
   type Envelope,
 } from '@brix-share/shared';
 
+import { hashesEqual } from './token.ts';
+
 export type Status = 'pending' | 'ready' | 'ended';
 export type EndedReason = 'consumed' | 'expired' | 'deleted';
 
@@ -36,6 +38,8 @@ export interface SecretItem {
   expiresAt: number;
   createdAt: number;
   deleteTokenHash: string;
+  /** Older stored items may lack this field; authorization rejects them. */
+  consumeTokenHash?: string;
   fileIds: string[];
   /** Declared plaintext sizes, same order as fileIds; finalize checks the stored objects against them. */
   fileSizes?: number[];
@@ -93,6 +97,7 @@ export interface NewSecret {
   availableFrom: number | null;
   createdAt: number;
   deleteTokenHash: string;
+  consumeTokenHash: string;
   /** Declared plaintext sizes in envelope.fileIds order; a secret with files starts pending. */
   fileSizes: number[];
 }
@@ -128,17 +133,20 @@ export class Repo {
   /** Status and timing only, never the envelope: for the non-counting availability check. */
   async availability(
     id: string,
-  ): Promise<Pick<SecretItem, 'status' | 'expiresAt' | 'availableFrom'> | undefined> {
+  ): Promise<
+    Pick<SecretItem, 'status' | 'expiresAt' | 'availableFrom' | 'consumeTokenHash'> | undefined
+  > {
     const res = await this.db.read.send(
       new GetCommand({
         TableName: this.table,
         Key: { pk: secretKey(id) },
         ConsistentRead: true,
-        ProjectionExpression: '#s, expiresAt, availableFrom',
+        ProjectionExpression: '#s, expiresAt, availableFrom, consumeTokenHash',
         ExpressionAttributeNames: { '#s': 'status' },
       }),
     );
-    return res.Item as Pick<SecretItem, 'status' | 'expiresAt' | 'availableFrom'> | undefined;
+    return res.Item as
+      Pick<SecretItem, 'status' | 'expiresAt' | 'availableFrom' | 'consumeTokenHash'> | undefined;
   }
 
   /** Records a used proof-of-work challenge. False if it was used before. */
@@ -173,6 +181,7 @@ export class Repo {
       expiresAt: s.expiresAt,
       createdAt: s.createdAt,
       deleteTokenHash: s.deleteTokenHash,
+      consumeTokenHash: s.consumeTokenHash,
       fileIds: s.envelope.fileIds,
       purgeAt: s.expiresAt + TOMBSTONE_RETENTION_SEC,
       sweepPart: 'live',
@@ -273,11 +282,22 @@ export class Repo {
    * PLAN section 9.1. At most two conditional attempts; the caller never retries. `clock` is read again
    * right before each write, so the expiry and availability conditions use the time of the write.
    */
-  async consume(id: string, clock: () => number, country: string): Promise<ConsumeResult> {
+  async consume(
+    id: string,
+    clock: () => number,
+    country: string,
+    tokenHash?: string,
+  ): Promise<ConsumeResult> {
     for (let attempt = 0; attempt < 2; attempt++) {
       const item = await this.get(id);
       const now = clock();
       if (!item || item.status !== 'ready') return { kind: 'not_found' };
+      if (
+        item.consumeTokenHash === undefined ||
+        tokenHash === undefined ||
+        !hashesEqual(item.consumeTokenHash, tokenHash)
+      )
+        return { kind: 'not_found' };
       if (item.expiresAt <= now) {
         await this.expireIfStale(id, now);
         return { kind: 'not_found' };
@@ -301,8 +321,11 @@ export class Repo {
     country: string,
   ): Promise<ConsumeResult> {
     const retrieval: Retrieval = { at: now, country };
+    const authorization = 'consumeTokenHash = :h';
+    const authValues = { ':h': item.consumeTokenHash };
     const live =
-      'attribute_exists(pk) AND #status = :ready AND expiresAt > :now AND (attribute_not_exists(availableFrom) OR availableFrom <= :now)';
+      'attribute_exists(pk) AND #status = :ready AND expiresAt > :now AND (attribute_not_exists(availableFrom) OR availableFrom <= :now) AND ' +
+      authorization;
 
     if (item.viewsRemaining === 1) {
       // 9.1.2: the final retrieval turns the item into a tombstone in the same write.
@@ -316,7 +339,14 @@ export class Repo {
             set: ['viewsRemaining = :zero', 'retrievals = list_append(retrievals, :r)'],
             add: 'retrievalCount :one',
             condition: `${live} AND viewsRemaining = :one`,
-            values: { ':ready': 'ready', ':now': now, ':zero': 0, ':one': 1, ':r': [retrieval] },
+            values: {
+              ...authValues,
+              ':ready': 'ready',
+              ':now': now,
+              ':zero': 0,
+              ':one': 1,
+              ':r': [retrieval],
+            },
           },
           'ALL_OLD',
         ),
@@ -331,7 +361,12 @@ export class Repo {
       };
     }
 
-    const values: Record<string, unknown> = { ':ready': 'ready', ':now': now, ':one': 1 };
+    const values: Record<string, unknown> = {
+      ...authValues,
+      ':ready': 'ready',
+      ':now': now,
+      ':one': 1,
+    };
     const sets: string[] = [];
     let condition = live;
     if (item.viewsRemaining !== undefined) {

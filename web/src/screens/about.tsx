@@ -30,7 +30,9 @@ export function HowItWorksScreen() {
             Your browser generates a random 256-bit key and encrypts the title, the text and any
             file names with AES-256-GCM. The key goes into the part of the link after the #, which
             browsers never send to a server. Brix stores the ciphertext, the policy you chose and a
-            hash of the manage token.
+            hash of each of the separate manage and retrieval tokens. Each attachment has its own
+            random key, held inside the encrypted text. A link leaked after the text is gone cannot
+            unlock leftover file objects.
           </P>
           <P>
             A secret ends after its last allowed retrieval, at its expiry, or when you delete it.
@@ -67,10 +69,10 @@ export function HowItWorksScreen() {
               link (and the passphrase, if you set one) to read it.
             </Li>
             <Li>
-              Retrievals used up without the key: anyone who learns the link's address (the part
-              before the #, for example from the logs of a chat or mail system) can use up its
-              retrievals without being able to read it. The manage page shows every retrieval with
-              time and country.
+              Retrievals used up by a full-link holder: anyone with the complete share link can use
+              up retrievals even without the optional passphrase. Knowing only the address before
+              the # cannot retrieve the secret or check its availability. The manage page shows
+              every retrieval with time and country.
             </Li>
             <Li>
               Identity: holding a link proves nothing about who sent or received it. Verify
@@ -90,9 +92,11 @@ export function HowItWorksScreen() {
           <H>Link previews</H>
           <P>
             Chat apps and mail scanners fetch links to show previews. Loading a share link does not
-            touch the secret: it is retrieved only when the recipient clicks Reveal secret. The
-            manage page shows the time and country of every retrieval, so an unexpected one stands
-            out.
+            count as a retrieval: it is retrieved only when the recipient clicks Reveal secret. The
+            request carries a retrieval token derived from the link key, independently of any
+            passphrase. A scanner that runs JavaScript and clicks Reveal with the full link can
+            still retrieve it. The manage page shows the time and country of every retrieval, so an
+            unexpected one stands out.
           </P>
         </Panel>
         <Contact />

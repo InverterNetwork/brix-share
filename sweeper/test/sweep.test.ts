@@ -43,6 +43,7 @@ async function setup() {
           createdAt,
           purgeAt: expiresAt + 30 * DAY,
           deleteTokenHash: 'a'.repeat(64),
+          consumeTokenHash: 'b'.repeat(64),
           ...sweep,
           ...item,
           fileIds,
@@ -228,6 +229,7 @@ describe('sweeper with items written by the API repository', () => {
       availableFrom: null,
       createdAt: T0 - HOUR,
       deleteTokenHash: 'a'.repeat(64),
+      consumeTokenHash: 'b'.repeat(64),
       fileSizes: [],
     });
     expect(ok).toBe(true);

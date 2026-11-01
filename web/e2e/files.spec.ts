@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto';
+import { b64urlDecode, type Envelope } from '@brix-share/shared';
+import { deriveKey, openText, openFile, DecryptError } from '../src/crypto/envelope.ts';
 import { expect, type Page } from '@playwright/test';
 import {
   FILES_ORIGIN,
@@ -52,6 +54,11 @@ test('files round trip: three files (one empty), byte-identical, CSP clean', asy
   baseURL,
 }, info) => {
   const w = await watch(page);
+  let createBody = '';
+  page.on('request', (rq) => {
+    if (rq.url().endsWith('/api/secrets') && rq.method() === 'POST')
+      createBody = rq.postData() ?? '';
+  });
   const c = await createViaUi(page, {
     text: 'see attachments',
     files: [
@@ -66,6 +73,22 @@ test('files round trip: three files (one empty), byte-identical, CSP clean', asy
 
   const r = await freshPage();
   const rw = await watch(r);
+  // Capture before delivery: mobile Chromium may evict no-store bodies before response.json().
+  let consumed: { envelope: Envelope } | undefined;
+  await r.route(`**/api/secrets/${c.id}/consume`, async (route) => {
+    const response = await route.fetch();
+    consumed = (await response.json()) as { envelope: Envelope };
+    await route.fulfill({ response });
+  });
+  const stored: { fileId: string; bytes: Buffer }[] = [];
+  await r.route(`${FILES_ORIGIN}/${c.id}/**`, async (route) => {
+    const response = await route.fetch();
+    stored.push({
+      fileId: new URL(route.request().url()).pathname.split('/').at(-1)!,
+      bytes: await response.body(),
+    });
+    await route.fulfill({ response });
+  });
   await r.goto(local(c.shareUrl), { waitUntil: 'domcontentloaded' });
   await r.getByRole('button', { name: 'Reveal secret' }).click();
   await expect(r.getByRole('list', { name: 'Files' }).getByRole('listitem')).toHaveCount(3);
@@ -74,6 +97,17 @@ test('files round trip: three files (one empty), byte-identical, CSP clean', asy
   r.on('download', () => early++);
   await r.waitForTimeout(500);
   expect(early).toBe(0);
+  expect(consumed !== undefined).toBe(true);
+  const textKey = await deriveKey(b64urlDecode(c.shareUrl.split('#')[1]!), null, null);
+  const payload = await openText(consumed!.envelope, textKey);
+  expect(new Set(payload.files.map((f) => f.key)).size).toBe(3);
+  expect(payload.files.every((f) => !createBody.includes(f.key))).toBe(true);
+  expect(stored).toHaveLength(3);
+  for (const { fileId, bytes } of stored) {
+    await expect(openFile(c.id, fileId, textKey, new Uint8Array(bytes))).rejects.toBeInstanceOf(
+      DecryptError,
+    );
+  }
   const saved = await savedFiles(r);
   expect(saved['audit-handover.pub.asc']).toEqual(PGP);
   expect(saved['empty.txt']!.length).toBe(0);
@@ -153,4 +187,26 @@ test('a failed upload says nothing was shared', async ({ page }) => {
     page.getByText('The files could not be uploaded. Nothing was shared; please try again.'),
   ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Your secret is ready.' })).toHaveCount(0);
+});
+
+test('a tampered attachment fails decryption while the text still opens', async ({
+  page,
+  freshPage,
+}) => {
+  const c = await createViaUi(page, {
+    text: 'intact text',
+    files: [{ name: 'tampered.txt', mimeType: 'text/plain', buffer: PGP }],
+  });
+  const r = await freshPage();
+  await r.route(`${FILES_ORIGIN}/${c.id}/**`, async (route) => {
+    const response = await route.fetch();
+    const body = await response.body();
+    body[body.length - 1]! ^= 1;
+    await route.fulfill({ response, body });
+  });
+  await r.goto(local(c.shareUrl), { waitUntil: 'domcontentloaded' });
+  await r.getByRole('button', { name: 'Reveal secret' }).click();
+  await expect(r.getByLabel('Secret', { exact: true })).toHaveValue('intact text');
+  await expect(r.getByText('Could not be fetched')).toBeVisible();
+  await expect(r.locator('a[download]')).toHaveCount(0);
 });

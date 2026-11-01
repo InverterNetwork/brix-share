@@ -14,8 +14,16 @@ vi.mock('../src/pow/solve.ts', async () => {
   };
 });
 
-const { ApiError, NetworkError, consumeSecret, createSecret, deleteSecret, getStatus, serverNow } =
-  await import('../src/api.ts');
+const {
+  ApiError,
+  NetworkError,
+  consumeSecret,
+  getAvailability,
+  createSecret,
+  deleteSecret,
+  getStatus,
+  serverNow,
+} = await import('../src/api.ts');
 
 const ID = 'AAAAAAAAAAAAAAAAAAAAAA';
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -75,18 +83,26 @@ const body = (now: number): CreateBody => ({
     availableFrom: null,
   },
   manageTokenHash: 'a'.repeat(64),
+  consumeTokenHash: 'b'.repeat(64),
   files: [],
 });
 
 describe('api client', () => {
+  it('availability sends the consume capability only in its header', async () => {
+    replies.push(() => json(200, { availableFrom: null }));
+    expect(await getAvailability(ID, 'consume-token')).toEqual({ kind: 'ready' });
+    expect(calls[0]).toMatchObject({ method: 'GET', url: `/api/secrets/${ID}`, body: null });
+    expect(calls[0]!.headers['x-consume-token']).toBe('consume-token');
+  });
   it('sends the body hash on every request and derives server time from Date', async () => {
     replies.push(() => json(404, { error: 'not_found', message: 'x' }));
-    expect(await consumeSecret(ID)).toEqual({ kind: 'not_found' });
+    expect(await consumeSecret(ID, 'consume-token')).toEqual({ kind: 'not_found' });
     expect(calls[0]).toMatchObject({
       method: 'POST',
       url: `/api/secrets/${ID}/consume`,
       body: null,
     });
+    expect(calls[0]!.headers['x-consume-token']).toBe('consume-token');
     expect(calls[0]!.headers['x-amz-content-sha256']).toBe(sha(''));
     expect(Math.abs(serverNow() - Date.parse('Fri, 09 Oct 2026 12:00:00 GMT') / 1000)).toBeLessThan(
       5,
@@ -146,7 +162,7 @@ describe('api client', () => {
     replies.push(() =>
       json(425, { error: 'too_early', message: 'x', availableFrom: '2027-01-01T00:00:00.000Z' }),
     );
-    expect(await consumeSecret(ID)).toEqual({
+    expect(await consumeSecret(ID, 'consume-token')).toEqual({
       kind: 'too_early',
       availableFrom: '2027-01-01T00:00:00.000Z',
     });
@@ -158,7 +174,7 @@ describe('api client', () => {
         downloads: [],
       }),
     );
-    expect((await consumeSecret(ID)).kind).toBe('ok');
+    expect((await consumeSecret(ID, 'consume-token')).kind).toBe('ok');
 
     replies.push(() =>
       json(200, {
@@ -167,15 +183,15 @@ describe('api client', () => {
         downloads: [],
       }),
     );
-    await expect(consumeSecret(ID)).rejects.toMatchObject({ code: 'unexpected' });
+    await expect(consumeSecret(ID, 'consume-token')).rejects.toMatchObject({ code: 'unexpected' });
 
     replies.push(() => Promise.reject(new TypeError('Failed to fetch')));
     const before = calls.length;
-    await expect(consumeSecret(ID)).rejects.toBeInstanceOf(NetworkError);
+    await expect(consumeSecret(ID, 'consume-token')).rejects.toBeInstanceOf(NetworkError);
     expect(calls.length - before).toBe(1);
 
     replies.push(() => json(500, { error: 'internal', message: 'x' }));
-    await expect(consumeSecret(ID)).rejects.toBeInstanceOf(ApiError);
+    await expect(consumeSecret(ID, 'consume-token')).rejects.toBeInstanceOf(ApiError);
   });
 
   it('status and delete send the manage token header, 404 means nothing found', async () => {
@@ -197,7 +213,7 @@ describe('bounded reads', () => {
     replies.push(
       () => new Response(huge, { status: 500, headers: { 'content-type': 'application/json' } }),
     );
-    await expect(consumeSecret(ID)).rejects.toMatchObject({ code: 'unexpected' });
+    await expect(consumeSecret(ID, 'consume-token')).rejects.toMatchObject({ code: 'unexpected' });
   });
 
   it('shares one byte budget across downloads and cancels on overflow', async () => {

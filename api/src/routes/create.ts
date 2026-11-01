@@ -59,6 +59,7 @@ export async function createSecret(deps: Deps, body: string): Promise<FunctionUr
     availableFrom: availableFromSec,
     createdAt: now,
     deleteTokenHash: request.manageTokenHash,
+    consumeTokenHash: request.consumeTokenHash,
     // In envelope order, so finalize can compare each object with its declared size.
     fileSizes: request.envelope.fileIds.map((f) => request.files.find((d) => d.fileId === f)!.size),
   });

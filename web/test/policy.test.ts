@@ -21,6 +21,7 @@ function serverAccepts(policy: ReturnType<typeof policyOf>, serverNow: number) {
       },
       policy,
       manageTokenHash: 'a'.repeat(64),
+      consumeTokenHash: 'b'.repeat(64),
       pow: { challenge: 'c', nonce: '1' },
       files: [],
     },

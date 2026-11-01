@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { b64urlEncode, hashManageToken, secToIso, DAY } from '@brix-share/shared';
+import { b64urlEncode, hashManageToken, hashConsumeToken, secToIso, DAY } from '@brix-share/shared';
 import { inject } from 'vitest';
 import { handle } from '../src/app.ts';
 import type { Deps } from '../src/deps.ts';
@@ -47,15 +47,24 @@ export async function makeApi(opts: { difficulty?: number } = {}) {
     now: () => clock.now,
   };
 
+  // Test client supplies the capability by default; authorize:false sends the raw headers.
+  const consumeToken = b64urlEncode(randomBytes(32));
   const call = async (
     method: string,
     path: string,
-    init: { body?: unknown; headers?: Record<string, string> } = {},
+    init: { body?: unknown; headers?: Record<string, string>; authorize?: boolean } = {},
   ) => {
     const event: FunctionUrlEvent = {
       rawPath: path,
       requestContext: { http: { method } },
-      headers: init.headers ?? {},
+      headers: {
+        ...(init.authorize !== false &&
+        /^\/api\/secrets\/[^/]+(?:\/consume)?$/.test(path) &&
+        (method === 'GET' || method === 'POST')
+          ? { 'x-consume-token': consumeToken }
+          : {}),
+        ...init.headers,
+      },
       ...(init.body === undefined
         ? {}
         : { body: typeof init.body === 'string' ? init.body : JSON.stringify(init.body) }),
@@ -92,12 +101,13 @@ export async function makeApi(opts: { difficulty?: number } = {}) {
         availableFrom: policy.availableIn == null ? null : secToIso(clock.now + policy.availableIn),
       },
       manageTokenHash: await hashManageToken(token),
+      consumeTokenHash: await hashConsumeToken(consumeToken),
       pow: { challenge, nonce },
       files: [],
     };
     const res = await call('POST', '/api/secrets', { body });
-    return { id, token, body, res };
+    return { id, token, consumeToken, body, res };
   };
 
-  return { deps, repo, store, clock, call, create, table, db, clients, files };
+  return { deps, repo, store, clock, call, create, table, db, clients, files, consumeToken };
 }

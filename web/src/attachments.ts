@@ -1,11 +1,12 @@
 import {
   FILE_OVERHEAD_BYTES,
+  b64urlDecode,
   MAX_TOTAL_FILE_BYTES,
   type Envelope,
   type Payload,
 } from '@brix-share/shared';
 import { OverBudgetError, checkDownloadUrl, downloadFile } from './api.ts';
-import { openFile } from './crypto/envelope.ts';
+import { importFileKey, openFile } from './crypto/envelope.ts';
 
 export interface RevealedFile {
   name: string;
@@ -69,7 +70,6 @@ export function safeFileName(name: string): string {
  */
 export async function decryptFiles(
   id: string,
-  key: CryptoKey,
   payload: Payload,
   encrypted: (Uint8Array<ArrayBuffer> | null)[],
 ): Promise<RevealedFile[]> {
@@ -78,6 +78,7 @@ export async function decryptFiles(
       const stored = encrypted[i];
       if (!stored) return { name: safeFileName(f.name), size: f.size, url: null };
       try {
+        const key = await importFileKey(b64urlDecode(f.key));
         const bytes = await openFile(id, f.fileId, key, stored);
         if (bytes.length !== f.size) return { name: safeFileName(f.name), size: f.size, url: null };
         return {

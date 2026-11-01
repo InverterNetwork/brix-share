@@ -1,5 +1,12 @@
 import { randomBytes } from 'node:crypto';
-import { DAY, HOUR, b64urlEncode, hashManageToken, secToIso } from '@brix-share/shared';
+import {
+  DAY,
+  HOUR,
+  b64urlEncode,
+  hashManageToken,
+  hashConsumeToken,
+  secToIso,
+} from '@brix-share/shared';
 import { describe, expect, it } from 'vitest';
 import { cachedParams } from '../src/params.ts';
 import { issueChallenge, solve } from '../src/pow.ts';
@@ -26,6 +33,7 @@ async function withFiles(api: Api, size: number) {
       },
       policy: { maxViews: 1, expiresAt: secToIso(T0 + 3 * HOUR), availableFrom: null },
       manageTokenHash: await hashManageToken(token),
+      consumeTokenHash: await hashConsumeToken(api.consumeToken),
       pow: { challenge, nonce: solve(challenge, 8) },
       files: [{ fileId, size }],
     },

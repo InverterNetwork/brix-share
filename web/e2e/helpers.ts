@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, hkdfSync } from 'node:crypto';
 import {
   test as base,
   expect,
@@ -112,9 +112,18 @@ export async function status(request: APIRequestContext, c: Created) {
   };
 }
 
-export async function consumeDirect(request: APIRequestContext, id: string) {
-  return request.post(`/api/secrets/${id}/consume`, {
-    headers: { 'x-amz-content-sha256': bodyHash() },
+export async function consumeDirect(request: APIRequestContext, c: Created) {
+  const token = Buffer.from(
+    hkdfSync(
+      'sha256',
+      Buffer.from(c.shareUrl.split('#')[1]!, 'base64url'),
+      Buffer.alloc(0),
+      'brix-share/v1/consume',
+      32,
+    ),
+  ).toString('base64url');
+  return request.post(`/api/secrets/${c.id}/consume`, {
+    headers: { 'x-amz-content-sha256': bodyHash(), 'x-consume-token': token },
   });
 }
 

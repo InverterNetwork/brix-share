@@ -41,7 +41,7 @@ function match(
   if (sub === '/status' && method === 'GET')
     return { template: 'status', id, run: (d, e) => getStatus(d, id, e) };
   if (sub === undefined && method === 'GET')
-    return { template: 'availability', id, run: (d) => getAvailability(d, id) };
+    return { template: 'availability', id, run: (d, e) => getAvailability(d, id, e) };
   if (sub === undefined && method === 'DELETE')
     return { template: 'delete', id, run: (d, e) => deleteSecret(d, id, e) };
   return undefined;

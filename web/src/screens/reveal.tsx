@@ -16,6 +16,7 @@ import {
   ProtocolError,
   checkEnvelope,
   deriveKey,
+  deriveConsumeToken,
   envelopeSalt,
   openText,
 } from '../crypto/envelope.ts';
@@ -116,7 +117,7 @@ export function RevealScreen({
   const check = async () => {
     setState({ kind: 'checking' });
     try {
-      const a = await getAvailability(id);
+      const a = await getAvailability(id, await deriveConsumeToken(keyBytes.current!));
       setState(
         a.kind === 'not_found'
           ? { kind: 'gone' }
@@ -151,7 +152,7 @@ export function RevealScreen({
   const decrypt = async (envelope: Envelope, policy: Policy, passphrase: string | null) => {
     const key = await deriveKey(keyBytes.current!, passphrase, envelopeSalt(envelope));
     const payload = await openText(envelope, key);
-    const files = await decryptFiles(id, key, payload, encryptedFiles.current);
+    const files = await decryptFiles(id, payload, encryptedFiles.current);
     encryptedFiles.current = [];
     setState({ kind: 'revealed', payload, policy, files });
   };
@@ -160,7 +161,7 @@ export function RevealScreen({
     setState({ kind: 'loading' });
     let outcome;
     try {
-      outcome = await consumeSecret(id);
+      outcome = await consumeSecret(id, await deriveConsumeToken(keyBytes.current!));
     } catch (e) {
       // The request may have reached the server and counted (dropped connection, or a server error after an
       // ambiguous write). Never retry, not even on a click.
@@ -467,8 +468,9 @@ export function RevealScreen({
           </HeroIcon>
           <PageTitle>This secret is not available.</PageTitle>
           <p class="text-fg-3">
-            It does not exist or can no longer be opened: it was already retrieved, it expired, or
-            the sender deleted it. Ask the sender for a new link.
+            It does not exist, can no longer be opened (already retrieved, expired, or deleted by
+            the sender), or the link you received was altered or is incomplete. Ask the sender to
+            resend the link in full or create a new one.
           </p>
         </Centered>
       );

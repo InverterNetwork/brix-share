@@ -29,9 +29,9 @@ Prettier does not format Markdown. Docs are written by hand; do not reflow them.
 ## Hard rules
 
 - No crypto libraries. Browser: WebCrypto only. Server: `node:crypto` for hashing and HMAC only.
-- Never log request bodies, manage tokens, envelopes, ciphertext or presigned URLs. Never put IP addresses in the table.
+- Never log request bodies, manage or consume tokens, envelopes, ciphertext or presigned URLs. Never put IP addresses in the table.
 - Existing vectors in `shared/vectors/kat-v1.json` are frozen for protocol v1. New cases may be added; changing an existing one means a new protocol version. Fixed keys and IVs exist only in `shared/scripts/gen-vectors.ts`; real code always uses `crypto.getRandomValues`.
-- The manage token travels in the `x-manage-token` header, never in a URL query string (`Authorization` is taken by CloudFront OAC signing).
+- The manage token travels in the `x-manage-token` header and the consume token in `x-consume-token`, never in a URL query string (`Authorization` is taken by CloudFront OAC signing).
 - Imports use explicit `.ts` extensions (Node type stripping runs the CDK app and scripts directly).
 - Stage config (accounts, domains, zones) is not in the repository: `infra/stages.json` is git-ignored and written from the `STAGES_JSON` repository variable; `infra/stages.example.json` shows the format and is what CI and the tests use.
 - No secrets in the repository. The system has none by design (the proof-of-work HMAC key is generated at runtime in SSM); never commit anything that looks like one, and never print tokens from test runs into logs.
@@ -79,9 +79,4 @@ Also pre-approved but unused: `@preact/preset-vite` (Vite's built-in JSX transfo
 
 ## Roadmap
 
-Planned protocol follow-ups (both backward compatible: new secrets use them, old secrets keep the current path until they expire within 30 days, then the fallback is removed):
-- Per-file random keys carried inside the encrypted payload, so file objects that outlive a secret by a few minutes cannot be decrypted with a later-leaked link alone.
-- A consume token derived from the link key and stored hashed, so someone who knows only a link's path cannot burn its retrievals or poll its availability.
-
-Other:
 - Candidates for a later version (`docs/PLAN.md` section 15): pinned offline client, secret request links, retrieval notifications, Argon2id as protocol `v2`.

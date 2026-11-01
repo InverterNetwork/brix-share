@@ -3,6 +3,7 @@ import type { Deps } from '../deps.ts';
 import { header, type FunctionUrlEvent, type FunctionUrlResult } from '../http.ts';
 import { fileKey } from '../files.ts';
 import { logEvent } from '../log.ts';
+import { consumeTokenHash, hashesEqual } from '../token.ts';
 
 export function viewerCountry(event: FunctionUrlEvent): string {
   const c = header(event, 'cloudfront-viewer-country');
@@ -13,9 +14,20 @@ export function viewerCountry(event: FunctionUrlEvent): string {
  * Whether the share link can be opened now or later. Counts nothing and returns nothing a reveal would not:
  * 404 for everything consume answers with 404, else the release time (null if already released).
  */
-export async function getAvailability(deps: Deps, id: string): Promise<FunctionUrlResult> {
+export async function getAvailability(
+  deps: Deps,
+  id: string,
+  event: FunctionUrlEvent,
+): Promise<FunctionUrlResult> {
   const item = await deps.repo.availability(id);
-  if (item?.status !== 'ready' || item.expiresAt <= deps.now())
+  const hash = await consumeTokenHash(event);
+  if (
+    item?.status !== 'ready' ||
+    item.expiresAt <= deps.now() ||
+    item.consumeTokenHash === undefined ||
+    hash === undefined ||
+    !hashesEqual(item.consumeTokenHash, hash)
+  )
     return deps.http.error('not_found', 'This secret does not exist or can no longer be opened.');
   const later = item.availableFrom !== undefined && item.availableFrom > deps.now();
   return deps.http.json(200, { availableFrom: later ? secToIso(item.availableFrom!) : null });
@@ -26,7 +38,12 @@ export async function consumeSecret(
   id: string,
   event: FunctionUrlEvent,
 ): Promise<FunctionUrlResult> {
-  const r = await deps.repo.consume(id, () => deps.now(), viewerCountry(event));
+  const r = await deps.repo.consume(
+    id,
+    () => deps.now(),
+    viewerCountry(event),
+    await consumeTokenHash(event),
+  );
   if (r.kind === 'not_found')
     return deps.http.error('not_found', 'This secret does not exist or can no longer be opened.');
   if (r.kind === 'too_early') {

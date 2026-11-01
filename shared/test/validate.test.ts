@@ -31,6 +31,7 @@ function body(
       ...policyOverrides,
     },
     manageTokenHash: 'a'.repeat(64),
+    consumeTokenHash: 'b'.repeat(64),
     pow: { challenge: 'c', nonce: '123' },
     files: [],
     ...overrides,
@@ -83,6 +84,9 @@ describe('validateCreateRequest', () => {
   });
 
   it('rejects uppercase or short manage token hashes', () => {
+    expect(ok(body({ consumeTokenHash: undefined }))).toBe(false);
+    expect(ok(body({ consumeTokenHash: 'A'.repeat(64) }))).toBe(false);
+    expect(ok(body({ consumeTokenHash: 'a'.repeat(63) }))).toBe(false);
     expect(ok(body({ manageTokenHash: 'A'.repeat(64) }))).toBe(false);
     expect(ok(body({ manageTokenHash: 'a'.repeat(63) }))).toBe(false);
   });
@@ -171,7 +175,13 @@ describe('validateCreateRequest', () => {
 
 describe('payloadMatchesEnvelope', () => {
   const env = EnvelopeSchema.parse(body({}, { fileIds: [id(2), id(3)] }).envelope);
-  const file = (n: number) => ({ fileId: id(n), name: 'a', size: 1, mime: '' });
+  const file = (n: number) => ({
+    fileId: id(n),
+    name: 'a',
+    size: 1,
+    mime: '',
+    key: b64urlEncode(new Uint8Array(32)),
+  });
   it('requires same files in the same order', () => {
     expect(
       payloadMatchesEnvelope(

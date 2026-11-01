@@ -11,6 +11,7 @@ import {
   ErrorResponseSchema,
   FinalizeResponseSchema,
   MANAGE_TOKEN_HEADER,
+  CONSUME_TOKEN_HEADER,
   StatusResponseSchema,
   TooEarlyResponseSchema,
   type ConsumeResponse,
@@ -183,8 +184,14 @@ export type Availability =
   { kind: 'ready' } | { kind: 'not_found' } | { kind: 'too_early'; availableFrom: string };
 
 /** Whether the share link can be opened; counts nothing. Errors and slow answers are the caller's to ignore. */
-export async function getAvailability(id: string): Promise<Availability> {
-  const res = await request('GET', `/api/secrets/${id}`, undefined, {}, 8_000);
+export async function getAvailability(id: string, consumeToken: string): Promise<Availability> {
+  const res = await request(
+    'GET',
+    `/api/secrets/${id}`,
+    undefined,
+    { [CONSUME_TOKEN_HEADER]: consumeToken },
+    8_000,
+  );
   if (res.status === 404) return { kind: 'not_found' };
   if (!res.ok) return fail(res);
   const { availableFrom } = await parse(res, AvailabilityResponseSchema);
@@ -192,8 +199,10 @@ export async function getAvailability(id: string): Promise<Availability> {
 }
 
 /** The only call that counts as a retrieval. Never retried, by the client or by this function. */
-export async function consumeSecret(id: string): Promise<ConsumeOutcome> {
-  const res = await request('POST', `/api/secrets/${id}/consume`);
+export async function consumeSecret(id: string, consumeToken: string): Promise<ConsumeOutcome> {
+  const res = await request('POST', `/api/secrets/${id}/consume`, undefined, {
+    [CONSUME_TOKEN_HEADER]: consumeToken,
+  });
   if (res.status === 200) return { kind: 'ok', data: await parse(res, ConsumeResponseSchema) };
   if (res.status === 404) return { kind: 'not_found' };
   if (res.status === 425) {
