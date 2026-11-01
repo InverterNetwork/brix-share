@@ -1,16 +1,15 @@
-# Quay v2 PR reviews
+# Quay reviews
 
-Reviews start after successful PR runs of `ci`.
+`Quay Review` requests a review after the entire `ci` workflow succeeds for a pull request. CI covers PRs targeting any branch. Failed or cancelled CI and push CI do not request reviews. Draft PRs use the same request path.
 
-`quay-review.yml` sends event identities to `/quay/v2/review-pr`. It has read-only GitHub permissions and never checks out PR code. Quay fetches GitHub evidence before accepting a request. The first review is full; later compatible revisions use the last published baseline. A changed base or configuration requires a new baseline.
+The GitHub Apps need repository access and the organization Actions secrets `QUAY_REVIEW_URL` and `QUAY_REVIEW_PR_TOKEN` must be available. The submission workflow has read-only GitHub permissions, never checks out PR code and forwards source run and PR identities. Quay handles authorization, eligibility, superseded revisions and deduplication.
 
-Repository writers can request verification with `/review` or `/review verify`, and a fresh full review with `/review full`. The Actions form supports targeted/full requests. Quay checks the actual comment author or dispatch actor's repository permission. PR closure cancels pending work. Slack and CI share the durable queue; retries are deduplicated.
+Use `/review` or `/review verify` for verification, `/review full` for a fresh review. Commands accept case and whitespace variations. The Actions form supports targeted/full requests and must run from the default branch; the target PR can use any branch. These requests do not wait for CI and explicit rejections fail visibly. Closing a PR sends cancellation.
 
-## Activation prerequisites
+GitHub lookup and Quay submission use up to four attempts for transient HTTP and connection failures, reject redirects and sanitize errors. HTTP 422 is benign only for automatic and closure requests.
 
-1. Use the repository's normal merge and release process. This workflow must reach the default branch (`main`) before its privileged triggers activate. This PR does not authorize a release.
-2. Configure repository or organization Actions secrets `QUAY_REVIEW_URL` (the existing HTTPS Quay origin) and `QUAY_REVIEW_PR_TOKEN` (the existing canonical ingress bearer credential). Reuse existing values; do not put credentials in Git or rotate them for this change. Missing or unsafe configuration fails visibly.
-3. Have the Quay operator enroll `InverterNetwork/brix-share` in the root-managed review-ingress policy, with an internal public Slack channel containing Quay, the numeric workflow IDs for `ci`, and the `Quay review` workflow ID for manual dispatch. New workflow IDs must be read from GitHub after registration; do not guess them. Ensure supervisor Actions/repository reads and reviewer App access include this repository.
-4. Validate a real PR event, verify the resulting GitHub review is pinned to its head, and check a writer's `/review full` request. Confirm delivery retries do not duplicate reviews.
+Run `python3 -m unittest discover -s test-quay -v` with Python 3 and Node installed. All 32 tests execute the embedded Python and outer job condition with fixture identities and mocked HTTP. The `Quay review regression tests` job runs in normal CI before automatic submission is eligible.
 
-The company ingress is deployed, but this repository's enrollment and secret availability have not been verified. Existing CI/deployment jobs and branch protection rules are unchanged. There is no v1 fallback.
+The workflow activates when it reaches the default branch through the normal merge/promotion process. No application or AWS deployment is needed. After activation, verify a successful PR CI event produces a review for the intended revision, failed/push CI produces none and commands, manual requests and closure work. A green workflow or queued response proves submission only, not completed review delivery.
+
+Baseline: [infra PR #48](https://github.com/InverterNetwork/infra/pull/48).
