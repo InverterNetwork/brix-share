@@ -286,3 +286,7 @@ Copyright (C) 2026 Brix. The source code is licensed under the [GNU Affero Gener
 Not covered by that licence:
 - **The Brix brand.** The Brix name, the Brix and Brix Share logos (`assets/`, `design/brand/assets/`, the mark in `web/src/ui/shell.tsx`, `web/public/favicon.svg`) and the Brix visual identity belong to Brix and are not licensed for reuse. All rights reserved. A fork must remove them and use its own name and branding before it is deployed for others.
 - **Fonts** in `web/src/assets/fonts` are third-party works under the SIL Open Font License; see `LICENSE.md` there.
+
+## Quay reviews
+
+See [setup and verification](.github/quay-review.md).

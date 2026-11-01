@@ -1,0 +1,153 @@
+name: Quay Review
+
+# Quay deduplicates intents; independent review and closure requests must not cancel each other.
+on: # zizmor: ignore[concurrency-limits]
+  # Forward event identities only; no PR code or artifacts are executed.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: [ci]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number (run workflow from the default branch)
+        required: true
+        type: string
+      mode:
+        description: Verify changes or request a full fresh review
+        required: true
+        default: targeted
+        type: choice
+        options: [targeted, full]
+  # Quay authenticates the command author; comments are never executed.
+  issue_comment: # zizmor: ignore[dangerous-triggers]
+    types: [created]
+  # Closure notification only, with no checkout or repository writes.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: read # Resolve PR associations for the successful CI revision.
+
+jobs:
+  request-quay-review:
+    name: Submit Quay review request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request') ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request) ||
+      github.event_name == 'pull_request_target'
+    env:
+      QUAY_REVIEW_URL: ${{ secrets.QUAY_REVIEW_URL }}
+      QUAY_REVIEW_PR_TOKEN: ${{ secrets.QUAY_REVIEW_PR_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # No checkout: privileged events never execute code from the PR.
+      - name: Submit authenticated review intent
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          python3 - <<'PY'
+          import http.client
+          import json
+          import os
+          import re
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          with open(os.environ['GITHUB_EVENT_PATH']) as source:
+              event = json.load(source)
+          repository = event['repository']['full_name']
+          event_name = os.environ['GITHUB_EVENT_NAME']
+          if event_name == 'issue_comment' and not re.fullmatch(
+              r'/review(?:\s+(full|verify))?', event['comment']['body'].strip(), re.IGNORECASE
+          ):
+              print('Not a review command; no review requested.')
+              raise SystemExit(0)
+          if event_name == 'workflow_dispatch' and os.environ['GITHUB_REF'] != 'refs/heads/' + event['repository']['default_branch']:
+              raise SystemExit('Run Quay Review from the repository default branch; the target PR may use any branch.')
+          token = os.environ.get('QUAY_REVIEW_PR_TOKEN', '')
+          configuration_error = 'Configure the HTTPS QUAY_REVIEW_URL and QUAY_REVIEW_PR_TOKEN secrets.'
+          try:
+              base = urllib.parse.urlsplit(os.environ.get('QUAY_REVIEW_URL', ''))
+              if not token or base.scheme != 'https' or not base.hostname or base.username is not None:
+                  raise ValueError()
+              base.port  # Validate the optional port without exposing the URL in errors.
+          except ValueError:
+              raise SystemExit(configuration_error)
+          endpoint = urllib.parse.urlunsplit((base.scheme, base.netloc, '/quay/v2/review-pr', '', ''))
+
+          class NoRedirects(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, request, response, code, message, headers, new_url):
+                  return None
+
+          # Credentials must only reach the configured endpoint, never a redirect target.
+          opener = urllib.request.build_opener(NoRedirects())
+          retryable = (429, 500, 502, 503, 504)
+
+          def send(request, service, timeout, allow_ineligible=False):
+              for attempt in range(4):
+                  try:
+                      with opener.open(request, timeout=timeout) as response:
+                          result = json.load(response)
+                      if not isinstance(result, (dict, list)):
+                          raise ValueError()
+                      return result
+                  except urllib.error.HTTPError as error:
+                      if error.code == 422 and allow_ineligible:
+                          print('PR request is no longer eligible; no review queued.')
+                          return None
+                      if error.code not in retryable or attempt == 3:
+                          raise SystemExit(service + ' refused the request (HTTP ' + str(error.code) + ').')
+                  except (OSError, http.client.HTTPException):
+                      if attempt == 3:
+                          raise SystemExit(service + ' could not be reached; rerun this workflow.')
+                  except (ValueError, UnicodeError):
+                      raise SystemExit(service + ' returned an invalid JSON response.')
+                  time.sleep(2 ** attempt)
+
+          def github(path):
+              request = urllib.request.Request('https://api.github.com/repos/' + repository + '/' + path,
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+              return send(request, 'GitHub PR association lookup', timeout=15)
+
+          if event_name == 'workflow_run':
+              run = event['workflow_run']
+              pulls = run['pull_requests']
+              if not pulls:
+                  pulls = github('commits/' + run['head_sha'] + '/pulls?per_page=100')
+              requests = [dict(kind='ci', repository=repository, pull_request=pr['number'],
+                  workflow_run_id=run['id'], head_sha=run['head_sha']) for pr in pulls]
+              if not requests:
+                  raise SystemExit('No PR associated with this CI revision; no review requested.')
+          elif event_name == 'workflow_dispatch':
+              number = event['inputs']['pull_request']
+              if not re.fullmatch(r'[1-9][0-9]*', number):
+                  raise SystemExit('pull_request must be a positive integer.')
+              if event['inputs']['mode'] not in ('targeted', 'full'):
+                  raise SystemExit('mode must be targeted or full.')
+              requests = [dict(kind='manual', repository=repository, pull_request=int(number),
+                  workflow_run_id=int(os.environ['GITHUB_RUN_ID']), mode=event['inputs']['mode'])]
+          elif event_name == 'issue_comment':
+              requests = [dict(kind='comment', repository=repository, pull_request=event['issue']['number'],
+                  comment_id=event['comment']['id'])]
+          elif event_name == 'pull_request_target':
+              requests = [dict(kind='closed', repository=repository, pull_request=event['pull_request']['number'])]
+          else:
+              raise SystemExit('Unsupported review event.')
+
+          for payload in requests:
+              request = urllib.request.Request(endpoint, data=json.dumps(payload).encode(), method='POST',
+                  headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+              result = send(request, 'Quay v2', timeout=30,
+                  allow_ineligible=payload['kind'] in ('ci', 'closed'))
+              if result is not None:
+                  if not isinstance(result, dict):
+                      raise SystemExit('Quay v2 returned an invalid response.')
+                  print('Quay v2 request:', result.get('status', 'accepted'))
+          PY
