@@ -93,4 +93,6 @@ One entry per judgment call: date, decision, reason. Plan-level decisions are in
 
 - 2026-10-12: Simplify the quick check: download the manifest in step 2 and read its expected hash only in step 4; keep release lag and failure handling in two short sentences. Move integrity-chain detail into Go deeper while retaining all trust limits. Remove the screenshot-only commit from this feature branch as requested by the maintainer; attach review captures to the PR instead. Reason: reduce duplicate instructions and keep binary review artifacts out of source history.
 
-- 2026-10-12: Add a read-only metadata workflow after successful `ci` PR runs, plus writer-requested re-reviews and pending-review cancellation on closure. Reuse the company review service; keep project tests, deployments and merge protections unchanged. Repository secrets and host enrollment remain activation prerequisites documented in `.github/quay-review.md`.
+- 2026-10-12: Add a read-only metadata workflow after successful `ci` PR runs, plus writer-requested re-reviews and pending-review cancellation on closure. Reuse the company review service; keep project tests, deployments and merge protections unchanged. GitHub App access and organization Actions secrets are prerequisites documented in `.github/quay-review.md`.
+
+- 2026-11-01: Adopt the hardened infra Quay baseline and run its 32 regression tests in normal PR CI using a separate read-only job. Reason: validate event handling and retry security without executing PR code in the privileged submission workflow.
