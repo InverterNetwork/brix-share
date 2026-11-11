@@ -17,7 +17,7 @@
     "qrcode": "1.5.4"
   },
   "devDependencies": {
-    "@aws-sdk/client-dynamodb": "3.1145.0",
+    "@aws-sdk/client-dynamodb": "3.1162.0",
     "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "esbuild": "0.28.2",
