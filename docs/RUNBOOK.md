@@ -25,8 +25,8 @@ The file maps stage names to settings:
 | `customDomain` | no | `true` once the zone is delegated: adds certificate, alias and DNS records. Without it the site runs on the CloudFront default domain |
 | `siteUrl` | no | The `https://<id>.cloudfront.net` URL while `customDomain` is off (the monitor reads it) |
 | `filesBucketSuffix` | yes | 8 to 16 lower-case letters and digits, random, for example `head -c 6 /dev/urandom \| od -An -tx1 \| tr -d ' \n'` |
-| `alarmTopicArns` | no | Existing SNS topics (same account and region) that every alarm also notifies |
-| `alarmEmail` | no | E-mail subscribed to the stage's alarm topic |
+| `alarmTopicArns` | no | Deprecated legacy setting, accepted but ignored by service alarms |
+| `alarmEmail` | no | Optional budget email subscriber on the owned topic; no service alarms |
 | `budgetUsd` | no | Monthly AWS Budget on the `app=brix-share` cost allocation tag |
 
 Working locally without access to the variable: use the example, `BRIX_SHARE_STAGES=infra/stages.example.json pnpm synth`. Tests and CI always use the example.
@@ -81,7 +81,7 @@ If it refuses because the local build differs from the release manifest: do not 
 1. Stage config with `customDomain: false`, a fresh random `filesBucketSuffix`, saved to `STAGES_JSON` (above).
 2. `AWS_PROFILE=<prod-admin-profile> scripts/deploy-infra.sh <stage>`. Creates the zone stack (not yet delegated, so not in use), the edge stack (WAF) and the main stack. Note the outputs `NameServers` (zone stack) and `SiteUrl` (main stack, `https://<id>.cloudfront.net`).
 3. Put `SiteUrl` into the stage config as `siteUrl` (the monitor reads it), tag a release and deploy it with `deploy-web.ts` (above), verify (below) against `SiteUrl`.
-4. Make sure alarms reach a person: `alarmTopicArns` (an existing team topic), `alarmEmail`, or a manual subscription to the alarm topic; deploy infra again after changing the stage config.
+4. Confirm central warning-topic discovery, source grants and native ALARM/OK delivery to #infra-alerts with the coordinator under separate approval. See Central alarm cutover below.
 5. Optional budget: set `budgetUsd`, and activate the `app` cost allocation tag in the payer (management) account's Billing console.
 
 ### Switching on the custom domain
@@ -137,7 +137,7 @@ Rate limits per IP and 5 minutes: create 20, consume 60, challenge 60, everythin
 
 ## Alarms
 
-All go to the SNS topic of the stage and to every topic in `alarmTopicArns` (prod: the team's alerts topic, which a forwarder posts to the team's Slack channel), on ALARM and again on OK (that forwarder posts ALARM only). Alarm names are `BrixShare-<stage>-<Name>`.
+All service alarms send ALARM and OK to the central warning topic with propagated brix/share labels, routing to #infra-alerts without paging. Alarm names are `BrixShare-<stage>-<Name>`. The owned topic and optional `alarmEmail` subscription serve budget notifications only; `alarmTopicArns` is ignored.
 
 | Alarm | Meaning | First response |
 |---|---|---|
@@ -213,7 +213,7 @@ What it can and cannot see:
 
 ## Ownership
 
-One named maintainer (PLAN decision 14). Quarterly: dependency review (lockfile diff, 7-day cooldown stays on), re-run the test suites, check alarms still have subscribers, check CloudFront log retention. Any change to the crypto protocol is a new protocol version with new vectors and a new review.
+One named maintainer (PLAN decision 14). Quarterly: dependency review (lockfile diff, 7-day cooldown stays on), re-run the test suites, check central source grants, routing tags and ALARM/OK delivery; check optional budget email subscriptions separately, check CloudFront log retention. Any change to the crypto protocol is a new protocol version with new vectors and a new review.
 
 ## Central alarm cutover
 
