@@ -6,7 +6,6 @@ import {
   RemovalPolicy,
   Stack,
   type StackProps,
-  aws_budgets as budgets,
   aws_certificatemanager as acm,
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
@@ -21,8 +20,6 @@ import {
   aws_route53 as route53,
   aws_route53_targets as r53targets,
   aws_s3 as s3,
-  aws_sns as sns,
-  aws_sns_subscriptions as subs,
   aws_ssm as ssm,
 } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
@@ -530,11 +527,6 @@ export class BrixShareStack extends Stack {
 
     // ---------- Metrics and alarms ----------
 
-    const topic = new sns.Topic(this, 'Alarms', {
-      displayName: `Brix Share ${stage.name} alarms`,
-      enforceSSL: true,
-    });
-    if (stage.alarmEmail) topic.addSubscription(new subs.EmailSubscription(stage.alarmEmail));
     const filterMetric = (
       name: string,
       logGroup: logs.ILogGroup,
@@ -680,37 +672,6 @@ export class BrixShareStack extends Stack {
       schedule: events.Schedule.rate(Duration.minutes(15)),
       targets: [new targets.LambdaFunction(governor.fn, { retryAttempts: 0 })],
     });
-
-    if (stage.budgetUsd) {
-      topic.addToResourcePolicy(
-        new iam.PolicyStatement({
-          actions: ['sns:Publish'],
-          principals: [new iam.ServicePrincipal('budgets.amazonaws.com')],
-          resources: [topic.topicArn],
-          conditions: { StringEquals: { 'aws:SourceAccount': stage.account } },
-        }),
-      );
-      new budgets.CfnBudget(this, 'Budget', {
-        budget: {
-          budgetName: `BrixShare-${stage.name}`,
-          budgetType: 'COST',
-          timeUnit: 'MONTHLY',
-          budgetLimit: { amount: stage.budgetUsd, unit: 'USD' },
-          costFilters: { TagKeyValue: ['user:app$brix-share'] },
-        },
-        notificationsWithSubscribers: [
-          {
-            notification: {
-              notificationType: 'FORECASTED',
-              comparisonOperator: 'GREATER_THAN',
-              threshold: 100,
-              thresholdType: 'PERCENTAGE',
-            },
-            subscribers: [{ subscriptionType: 'SNS', address: topic.topicArn }],
-          },
-        ],
-      });
-    }
 
     new CfnOutput(this, 'DistributionDomainName', { value: distribution.distributionDomainName });
     new CfnOutput(this, 'DistributionId', { value: distribution.distributionId });
