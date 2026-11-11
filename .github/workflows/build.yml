@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   build-twice:
@@ -24,9 +25,12 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: a/.nvmrc
+          registry-url: https://npm.pkg.github.com
+          scope: '@inverternetwork'
       - run: corepack enable
       - name: Build in a/ and b/
         env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRIX_SHARE_VERSION: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') && github.ref_name || 'dev' }}
         run: |
           for d in a b; do

@@ -214,3 +214,11 @@ What it can and cannot see:
 ## Ownership
 
 One named maintainer (PLAN decision 14). Quarterly: dependency review (lockfile diff, 7-day cooldown stays on), re-run the test suites, check alarms still have subscribers, check CloudFront log retention. Any change to the crypto protocol is a new protocol version with new vectors and a new review.
+
+## Central alarm cutover
+
+All eleven service alarms use `project=brix/share`, their stage environment, and warning severity through the account-local `/platform/v1/alerts/warning-topic-arn` parameter. ALARM and OK selectively propagate project/env/severity; notifications route to #infra-alerts without paging. Existing identities and governor automation stay unchanged. Missing data remains nonbreaching, so adoption creates no new dead-producer condition. Saved `alarmTopicArns` values are deprecated and ignored. The owned Alarms topic and optional email/budget consumers remain available, independently of service alarm delivery.
+
+Before deployment, confirm the SSM topic parameter, exact source grants, CloudWatch SNS/KMS permissions and regional native tag propagation support. Confirm out-of-code routes and open legacy incidents with the owner, assigning recovery handling before removing old OK delivery. Approval of the code does not authorize deployment or live tests. If a dev deployment exists, verify native ALARM and OK there before production, including SUCCESS propagation, expected channel and same-parent recovery. Otherwise agree a separately approved bounded production acceptance plan with the coordinator. After deployment inspect alarm states and the channel for false alarms; successful synth is not delivery evidence.
+
+Rollback through the approved deployment path restores the prior ALARM/OK actions to the owned topic and configured legacy topics. Keep shared forwarding infrastructure and router incident state intact; resolve or transfer open incidents explicitly. Merging runs CI only. A v* tag builds and publishes release evidence; infrastructure and web deploys remain manual.

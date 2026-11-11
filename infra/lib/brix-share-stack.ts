@@ -1,3 +1,4 @@
+import { labelAlarm, requireAlarmRouting } from '@inverternetwork/platform-cdk/alerts';
 import { fileURLToPath } from 'node:url';
 import {
   CfnOutput,
@@ -10,7 +11,6 @@ import {
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
   aws_cloudwatch as cloudwatch,
-  aws_cloudwatch_actions as cwActions,
   aws_dynamodb as dynamodb,
   aws_events as events,
   aws_events_targets as targets,
@@ -535,14 +535,6 @@ export class BrixShareStack extends Stack {
       enforceSSL: true,
     });
     if (stage.alarmEmail) topic.addSubscription(new subs.EmailSubscription(stage.alarmEmail));
-    const alarmActions = [
-      new cwActions.SnsAction(topic),
-      ...(stage.alarmTopicArns ?? []).map(
-        (arn, i) =>
-          new cwActions.SnsAction(sns.Topic.fromTopicArn(this, `ExternalAlarmTopic${i}`, arn)),
-      ),
-    ];
-
     const filterMetric = (
       name: string,
       logGroup: logs.ILogGroup,
@@ -580,16 +572,24 @@ export class BrixShareStack extends Stack {
       '$.value',
     );
 
+    requireAlarmRouting(this);
     const alarm = (id: string, props: cloudwatch.AlarmProps) => {
-      // Readable names and a product prefix: the shared team Slack channel shows both as they are.
+      // Keep names and construct paths stable when changing delivery.
       const a = new cloudwatch.Alarm(this, id, {
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
         ...props,
         alarmName: `BrixShare-${stage.name}-${id}`,
         alarmDescription: `Brix Share (${stage.name}): ${props.alarmDescription ?? id}`,
       });
-      a.addAlarmAction(...alarmActions);
-      a.addOkAction(...alarmActions);
+      labelAlarm(
+        a,
+        {
+          project: 'brix/share',
+          env: stage.name as 'dev' | 'staging' | 'prod',
+          severity: 'warning',
+        },
+        { ok: true },
+      );
       return a;
     };
 

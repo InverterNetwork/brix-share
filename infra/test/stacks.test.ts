@@ -13,6 +13,23 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
     json = JSON.stringify(mainT.toJSON());
   });
 
+  it('IAM and Events tags have unique keys ignoring case', () => {
+    for (const template of [mainT, edgeT, b.zoneT].filter((t) => t !== undefined)) {
+      for (const type of [
+        'AWS::IAM::Role',
+        'AWS::IAM::Policy',
+        'AWS::IAM::ManagedPolicy',
+        'AWS::Events::Rule',
+      ]) {
+        for (const resource of resourcesOf(template, type)) {
+          const tags = (resource.Properties?.Tags ?? []) as { Key: string; Value: string }[];
+          const keys = tags.map((t) => t.Key.toLowerCase());
+          expect(new Set(keys).size).toBe(keys.length);
+        }
+      }
+    }
+  });
+
   it('table: on-demand, TTL, no PITR, no stream, deletion protection, sparse files GSI', () => {
     mainT.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
       BillingMode: 'PAY_PER_REQUEST',
@@ -439,22 +456,63 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
       Namespace: `BrixShare/${stage.name}`,
       Threshold: 42,
     });
-    // Every alarm notifies the stage topic and each configured external topic, on ALARM and on OK.
     const alarms = resourcesOf(mainT, 'AWS::CloudWatch::Alarm');
-    expect(alarms.length).toBeGreaterThan(0);
+    expect(alarms).toHaveLength(11);
     for (const a of alarms) {
-      expect(a.Properties!.AlarmName).toMatch(new RegExp(`^BrixShare-${stage.name}-[A-Za-z0-9]+$`));
-      expect(a.Properties!.AlarmDescription).toMatch(/^Brix Share \(/);
-      const n = 1 + (stage.alarmTopicArns?.length ?? 0);
-      expect(a.Properties!.AlarmActions as unknown[]).toHaveLength(n);
-      expect(a.Properties!.OKActions as unknown[]).toHaveLength(n);
-      for (const arn of stage.alarmTopicArns ?? []) {
-        expect(a.Properties!.AlarmActions).toContain(arn);
-        expect(a.Properties!.OKActions).toContain(arn);
+      const props = a.Properties!;
+      expect(props.AlarmName).toMatch(new RegExp(`^BrixShare-${stage.name}-[A-Za-z0-9]+$`));
+      expect(String(props.AlarmDescription).length).toBeLessThanOrEqual(400);
+      expect(props.AlarmActions).toHaveLength(1);
+      expect(props.OKActions).toEqual(props.AlarmActions);
+      const action = (props.AlarmActions as { Ref: string }[])[0]!;
+      const parameters = mainT.toJSON().Parameters as Record<string, { Default: string }>;
+      expect(parameters[action.Ref]!.Default).toBe('/platform/v1/alerts/warning-topic-arn');
+      expect(props.InsufficientDataActions ?? []).toEqual([]);
+      expect(props.TreatMissingData).toBe('notBreaching');
+      expect(props.ActionConfiguration).toEqual({
+        AlarmTagsPropagation: {
+          Enabled: true,
+          IncludedTagKeys: ['project', 'env', 'severity'],
+        },
+      });
+      for (const tag of props.Tags as { Key: string; Value: string }[]) {
+        expect(tag.Key).toMatch(/^[\p{L}\p{N} _.:/=+@-]+$/u);
+        expect(tag.Value).toMatch(/^[\p{L}\p{N} _.:/=+@-]+$/u);
       }
+      expect(props.Tags).toEqual(
+        expect.arrayContaining([
+          { Key: 'project', Value: 'brix/share' },
+          { Key: 'env', Value: stage.name },
+          { Key: 'severity', Value: 'warning' },
+        ]),
+      );
     }
+    const resources = mainT.toJSON().Resources as Record<
+      string,
+      { Type: string; Properties?: Record<string, unknown> }
+    >;
+    const createId = Object.keys(resources).find(
+      (id) => resources[id]!.Properties?.AlarmName === `BrixShare-${stage.name}-CreateRateHigh`,
+    )!;
+    const governorId = Object.keys(resources).find(
+      (id) => id.startsWith('Governor') && resources[id]!.Type === 'AWS::Lambda::Function',
+    )!;
     mainT.hasResourceProperties('AWS::Events::Rule', {
-      EventPattern: Match.objectLike({ 'detail-type': ['CloudWatch Alarm State Change'] }),
+      EventPattern: {
+        source: ['aws.cloudwatch'],
+        'detail-type': ['CloudWatch Alarm State Change'],
+        resources: [{ 'Fn::GetAtt': [createId, 'Arn'] }],
+      },
+      Targets: [
+        Match.objectLike({
+          Arn: { 'Fn::GetAtt': [governorId, 'Arn'] },
+          RetryPolicy: { MaximumRetryAttempts: 2 },
+        }),
+      ],
+    });
+    mainT.hasResourceProperties('AWS::Events::Rule', {
+      ScheduleExpression: 'rate(15 minutes)',
+      Targets: [Match.objectLike({ Arn: { 'Fn::GetAtt': [governorId, 'Arn'] } })],
     });
   });
 

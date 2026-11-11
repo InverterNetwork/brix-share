@@ -19,13 +19,15 @@ it('accepts external alarm topics only in the stage account and region', () => {
     filesBucketSuffix: 'abc12345',
   };
   const ok = 'arn:aws:sns:eu-central-1:123456789012:team-alerts';
-  expect(readStages({ s: { ...base, alarmTopicArns: [ok] } })[0]!.alarmTopicArns).toEqual([ok]);
+  expect(readStages({ prod: { ...base, alarmTopicArns: [ok] } })[0]!.alarmTopicArns).toEqual([ok]);
   for (const bad of [
     'arn:aws:sns:us-east-1:123456789012:team-alerts',
     'arn:aws:sns:eu-central-1:210987654321:team-alerts',
     'arn:aws:sqs:eu-central-1:123456789012:team-alerts',
   ])
-    expect(() => readStages({ s: { ...base, alarmTopicArns: [bad] } })).toThrow(/alarmTopicArns/);
+    expect(() => readStages({ prod: { ...base, alarmTopicArns: [bad] } })).toThrow(
+      /alarmTopicArns/,
+    );
 });
 
 it('requires a random files bucket suffix', () => {
@@ -36,9 +38,9 @@ it('requires a random files bucket suffix', () => {
     hostedZone: { mode: 'create', zoneName: 'x.example' },
     adminRolePattern: 'r/*',
   };
-  expect(() => readStages({ s: base })).toThrow(/filesBucketSuffix/);
+  expect(() => readStages({ prod: base })).toThrow(/filesBucketSuffix/);
   for (const bad of ['short', 'UPPERCASE123', 'has-dash-123', 'x'.repeat(17)])
-    expect(() => readStages({ s: { ...base, filesBucketSuffix: bad } })).toThrow(
+    expect(() => readStages({ prod: { ...base, filesBucketSuffix: bad } })).toThrow(
       /filesBucketSuffix/,
     );
 });

@@ -27,8 +27,7 @@ export interface StageConfig {
   /** Optional e-mail subscribed to the alarm topic. */
   alarmEmail?: string;
   /**
-   * Existing SNS topics in the stage's account and region that every alarm also notifies (state changes
-   * to ALARM and back to OK), e.g. a team topic forwarded to Slack. Used as-is, never modified.
+   * Deprecated legacy configuration, accepted for saved stage files but ignored by alarm routing.
    */
   alarmTopicArns?: string[];
   /** Optional monthly AWS Budget (USD) on the app=brix-share cost allocation tag. */
@@ -45,6 +44,8 @@ export function readStages(raw: unknown): StageConfig[] {
   if (typeof raw !== 'object' || raw === null) throw new Error('stages.json must be an object');
   return Object.entries(raw as Record<string, Partial<Omit<StageConfig, 'name'>>>).map(
     ([name, cfg]) => {
+      if (!['dev', 'staging', 'prod'].includes(name))
+        throw new Error(`stage ${name}: expected dev, staging or prod`);
       if (!cfg.account || !/^\d{12}$/.test(cfg.account))
         throw new Error(`stage ${name}: account must be 12 digits`);
       if (!cfg.region || !cfg.domainName || !cfg.hostedZone || !cfg.adminRolePattern) {

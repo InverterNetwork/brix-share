@@ -8,6 +8,7 @@ packages:
 
 saveExact: true
 minimumReleaseAge: 10080
+minimumReleaseAgeExclude: ['@inverternetwork/*']
 
 allowBuilds:
   esbuild: true

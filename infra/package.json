@@ -10,11 +10,12 @@
   },
   "dependencies": {
     "@brix-share/shared": "workspace:*",
-    "aws-cdk-lib": "2.272.0",
+    "@inverternetwork/platform-cdk": "1.1.1",
+    "aws-cdk-lib": "2.275.0",
     "constructs": "10.8.1"
   },
   "devDependencies": {
-    "aws-cdk": "2.1144.0",
+    "aws-cdk": "2.1147.0",
     "esbuild": "0.28.2"
   }
 }
