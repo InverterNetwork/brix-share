@@ -86,7 +86,7 @@ Private package setup: follow the [platform-cdk setup guide](https://github.com/
 
 ## Release notes
 
-After pushing a `v*` tag on `main`, wait for the release workflow to succeed. It creates a draft release with `manifest.json` and a generated `### Verification` section. The release owner edits the draft in GitHub, adds human-written notes above that section, reviews them and publishes the release before deploying. Keep the generated verification text, hashes and manifest unchanged. Draft assets are not publicly available for independent verification.
+After pushing a `v*` tag on `main`, wait for the release workflow to succeed. It creates a draft release with `manifest.json` and a generated `### Verification` section. The release owner edits the draft in GitHub, adds human-written notes above that section, reviews them and publishes the release before deploying. Keep the generated verification text, collapsible File hashes (SHA-256) block, table and manifest unchanged. Draft assets are not publicly available for independent verification. The web deployment script refuses unpublished releases, including dry runs.
 
 Read the actual changes since the previous release tag. Use this format for subsequent releases, omitting empty categories and replacing all placeholders:
 
@@ -109,4 +109,4 @@ Read the actual changes since the previous release tag. Use this format for subs
 **Full changelog:** [vA…vB](https://github.com/InverterNetwork/brix-share/compare/vA...vB)
 ```
 
-Append the generated `### Verification` section last. Resolve Last Commit from the tag's commit, including for annotated tags. End each change bullet with its PR link. For the first release, use `## 🚀 Initial Release`, the Last Commit link, a one-line product description and short themed sections describing the app at that tag; omit the previous-release comparison.
+Append the generated `### Verification` section last. It contains the build commit text and the hash table inside `<details>` with `<summary>File hashes (SHA-256)</summary>`; keep that markup intact. Resolve Last Commit from the tag's commit, including for annotated tags. End each change bullet with its PR link. For the first release, use `## 🚀 Initial Release`, the Last Commit link, a one-line product description and short themed sections describing the app at that tag; omit the previous-release comparison.

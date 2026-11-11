@@ -34,6 +34,13 @@ const run = (cmd: string, argv: string[], env: NodeJS.ProcessEnv = process.env) 
   }).trim();
 const say = (s: string) => process.stdout.write(`${s}\n`);
 
+// Public verification requires a published release, including for dry runs.
+if (run('gh', ['release', 'view', tag, '--json', 'isDraft', '--jq', '.isDraft']) !== 'false') {
+  throw new Error(
+    `release ${tag} is unpublished; complete its notes and publish it before deployment`,
+  );
+}
+
 // Stage config is not in the repository; the STAGES_JSON repository variable is the source (git-ignored copy).
 writeFileSync(
   join(root, 'infra/stages.json'),

@@ -45,8 +45,13 @@ jobs:
             echo
             echo "Web build of \`$commit\`, reproduced twice in CI."
             echo
+            echo "<details>"
+            echo "<summary>File hashes (SHA-256)</summary>"
+            echo
             echo "| SHA-256 | File |"
             echo "|---|---|"
             jq -r '.files | to_entries[] | "| `\(.value)` | `\(.key)` |"' manifest.json
+            echo
+            echo "</details>"
           } > notes.md
           gh release create "$GITHUB_REF_NAME" manifest.json --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag --draft
