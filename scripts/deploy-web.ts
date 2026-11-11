@@ -3,7 +3,7 @@
  * Usage: AWS_PROFILE=<admin profile> node scripts/deploy-web.ts <stage> <tag> [--dry-run]
  *
  * 1. The working tree must be clean and at <tag>.
- * 2. Builds locally and refuses to continue unless every file equals the release manifest that CI published.
+ * 2. Builds locally and refuses to continue unless every file equals the CI-generated manifest on the published release.
  * 3. Assumes the stage's web deploy role (the only principal the static bucket accepts writes from).
  * 4. Uploads hashed assets first and index.html last, with explicit content types and caching, removes files
  *    older than the previous release, invalidates /index.html and /.
