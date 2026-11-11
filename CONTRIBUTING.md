@@ -63,6 +63,7 @@ Approved and in use:
 | `qrcode` | web | QR code for the share link, client-side only |
 | `@playwright/test` | web | browser tests |
 | `esbuild` | web, infra | bundling |
+| `@inverternetwork/platform-cdk` | infra | central alarm labels and routing |
 | `aws-cdk-lib`, `constructs`, `aws-cdk` | infra | infrastructure as code |
 
 `actions/attest-build-provenance` is approved for signing release manifests in GitHub Actions (pinned by commit SHA). No runtime dependency.
@@ -80,3 +81,5 @@ Also pre-approved but unused: `@preact/preset-vite` (Vite's built-in JSX transfo
 ## Roadmap
 
 - Candidates for a later version (`docs/PLAN.md` section 15): pinned offline client, secret request links, retrieval notifications, Argon2id as protocol `v2`.
+
+Private package setup: follow the [platform-cdk setup guide](https://github.com/InverterNetwork/infra/tree/main/packages/platform-cdk#setup) before installing. The committed `.npmrc` contains only the registry scope. Export the package-read token through `NODE_AUTH_TOKEN`; never commit credentials. First-party package updates are exempt from the seven-day cooldown.

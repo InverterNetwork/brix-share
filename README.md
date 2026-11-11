@@ -62,7 +62,15 @@ The full threat model is PLAN section 4.
 
 ## Verify this site
 
-Encryption happens in your browser: the code it loads decides whether your secret stays private. Brix Share is open source, its web build is reproducible, and every release publishes SHA-256 hashes of every served file on GitHub, with an artifact attestation signing the manifest. Anyone can rebuild the tag and compare with the manifest; that reproducibility is the underlying root of trust.
+Encryption happens in your browser: the code it loads decides whether your secret stays private. Brix Share is open source, its web build is reproducible, and every release publishes SHA-256 hashes of every served file on GitHub, with an artifact attestation signing the manifest. Anyone can rebuild the tag and compare with the manifest; that reproducibility is the underlying root of trust. The public web rebuild needs no organization package access:
+
+```sh
+# From a clean checkout of the release tag, with Node and pnpm from .nvmrc/package.json.
+BRIX_SHARE_VERSION=vX.Y.Z BRIX_SHARE_COMMIT="$(git rev-parse HEAD)" node scripts/rebuild-web.ts public-web-dist
+node scripts/manifest.ts public-web-dist vX.Y.Z "$(git rev-parse HEAD)" > rebuilt-manifest.json
+```
+
+Compare the `files` hashes in `rebuilt-manifest.json` with the release's attested `manifest.json`. The output directory must not already exist. The script excludes infra and its unused private lockfile records, keeping public dependency pins unchanged. CI runs this credential-free path twice. Full workspace development, including infrastructure, requires the private package setup in CONTRIBUTING.md.
 
 The release's `index.html` pins the entry script and stylesheet with Subresource Integrity hashes the browser enforces. All code that handles secrets is bundled into that script. **Every page path must return byte-identical `index.html`: check the exact URL you are about to use.** Checking `/index.html` alone cannot detect a different document served on share links. The expected hash must come from GitHub, never from the site being checked.
 

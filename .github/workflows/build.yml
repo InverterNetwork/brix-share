@@ -31,7 +31,7 @@ jobs:
         run: |
           for d in a b; do
             commit=$(git -C "$d" rev-parse 'HEAD^{commit}')
-            (cd "$d" && pnpm install --frozen-lockfile && BRIX_SHARE_COMMIT="$commit" pnpm --filter @brix-share/web build)
+            BRIX_SHARE_COMMIT="$commit" node "$d/scripts/rebuild-web.ts" "$d/web/dist"
             node --experimental-strip-types --disable-warning=ExperimentalWarning "$d/scripts/manifest.ts" "$d/web/dist" "$GITHUB_REF_NAME" "$commit" > "manifest-$d.json"
           done
       - name: Compare
