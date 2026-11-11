@@ -75,7 +75,7 @@ Also pre-approved but unused: `@preact/preset-vite` (Vite's built-in JSX transfo
 - Changes to `main` go through a pull request with one approval. No force pushes.
 - Commit messages: `type(scope): description`, imperative.
 - Record every judgment call in `docs/DECISIONS.md`: date, decision, reason. Changes to the crypto protocol, the access semantics, the data model, the security claims in `docs/PLAN.md` section 4 or the cost shape need explicit maintainer agreement first.
-- Releases are `v*` tags on `main`. The release workflow builds twice, checks the builds are identical and publishes a manifest of every served file's SHA-256 on a GitHub release. Tags cannot be moved or deleted.
+- Releases are `v*` tags on `main`. The release workflow builds twice, checks the builds are identical and creates a draft GitHub release with an attested manifest of every served file's SHA-256. Complete and publish the notes before deployment, as described below. Tags cannot be moved or deleted.
 - Deploys are manual and done by a maintainer with admin access; nothing deploys from CI. See [the deployment guide](docs/DEPLOYING.md) and [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 ## Roadmap
@@ -83,3 +83,30 @@ Also pre-approved but unused: `@preact/preset-vite` (Vite's built-in JSX transfo
 - Candidates for a later version (`docs/PLAN.md` section 15): pinned offline client, secret request links, retrieval notifications, Argon2id as protocol `v2`.
 
 Private package setup: follow the [platform-cdk setup guide](https://github.com/InverterNetwork/infra/tree/main/packages/platform-cdk#setup) before installing. The committed `.npmrc` contains only the registry scope. Export the package-read token through `NODE_AUTH_TOKEN`; never commit credentials. First-party package updates are exempt from the seven-day cooldown.
+
+## Release notes
+
+After pushing a `v*` tag on `main`, wait for the release workflow to succeed. It creates a draft release with `manifest.json` and a generated `### Verification` section. The release owner edits the draft in GitHub, adds human-written notes above that section, reviews them and publishes the release before deploying. Keep the generated verification text, hashes and manifest unchanged. Draft assets are not publicly available for independent verification.
+
+Read the actual changes since the previous release tag. Use this format for subsequent releases, omitting empty categories and replacing all placeholders:
+
+```md
+## 🚀 Production Release
+**Last Commit:** [`<sha8>`](https://github.com/InverterNetwork/brix-share/tree/<full-tag-commit>)
+
+### Added
+- Describe the new behavior. ([#<pr>](https://github.com/InverterNetwork/brix-share/pull/<pr>))
+
+### Changed
+- Describe the behavior change, including compatibility and deployment requirements. ([#<pr>](https://github.com/InverterNetwork/brix-share/pull/<pr>))
+
+### Fixed
+- Describe the corrected behavior. ([#<pr>](https://github.com/InverterNetwork/brix-share/pull/<pr>))
+
+### Maintenance
+- Describe relevant tooling or operational work. ([#<pr>](https://github.com/InverterNetwork/brix-share/pull/<pr>))
+
+**Full changelog:** [vA…vB](https://github.com/InverterNetwork/brix-share/compare/vA...vB)
+```
+
+Append the generated `### Verification` section last. Resolve Last Commit from the tag's commit, including for annotated tags. End each change bullet with its PR link. For the first release, use `## 🚀 Initial Release`, the Last Commit link, a one-line product description and short themed sections describing the app at that tag; omit the previous-release comparison.

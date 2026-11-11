@@ -63,7 +63,7 @@ Do not deploy a change to the `createEnabled`, `powDifficulty` or `governor` SSM
 
 ### Web
 
-1. Tag a release on `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `release` workflow builds twice, fails if the builds differ, and publishes `manifest.json` (SHA-256 of every served file) on the GitHub release.
+1. Tag a release on `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `release` workflow builds twice, fails if the builds differ, and creates a draft GitHub release with `manifest.json` (SHA-256 of every served file). Complete the human-written notes and publish the release before deployment; see [Release notes](../CONTRIBUTING.md#release-notes). Keep the generated Verification section unchanged.
 2. Deploy that tag:
 
 ```
