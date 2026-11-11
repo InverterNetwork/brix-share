@@ -150,7 +150,7 @@ export class BrixShareStack extends Stack {
         entry: entry(file),
         projectRoot: repoRoot,
         depsLockFilePath: entry('pnpm-lock.yaml'),
-        runtime: lambda.Runtime.NODEJS_22_X,
+        runtime: lambda.Runtime.NODEJS_24_X,
         architecture: lambda.Architecture.ARM_64,
         memorySize: 256,
         logGroup,
@@ -159,7 +159,7 @@ export class BrixShareStack extends Stack {
         bundling: {
           minify: true,
           sourceMap: false,
-          target: 'node22',
+          target: 'node24',
           format: nodejs.OutputFormat.ESM,
           mainFields: ['module', 'main'],
           // Bundle the pinned SDK instead of using the runtime's copy.

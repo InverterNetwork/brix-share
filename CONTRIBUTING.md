@@ -6,7 +6,7 @@ Security issues: report them to `security@brix.money`, not in a public issue.
 
 ## Setup
 
-- Node 22, pinned in `.nvmrc` (for example `fnm use` or `nvm use`).
+- Node 24, pinned in `.nvmrc` (for example `fnm use` or `nvm use`).
 - pnpm via corepack: `corepack enable`, then `pnpm install`. The pnpm version comes from `packageManager` in `package.json`.
 - Docker, for DynamoDB Local (API and sweeper tests) and the Playwright suite.
 

@@ -13,7 +13,7 @@ Zero-knowledge secret sharing. Spec: `docs/PLAN.md`. Every judgment call: `docs/
 
 ## Commands
 
-Node 22 via fnm (`.nvmrc`), pnpm via corepack.
+Node 24 via fnm (`.nvmrc`), pnpm via corepack.
 
 - `pnpm install`
 - `pnpm lint` (ESLint type-checked + Prettier check), `pnpm format`
