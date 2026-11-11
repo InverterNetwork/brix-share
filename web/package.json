@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@brix-share/shared": "workspace:*",
-    "lucide-preact": "1.50.0",
+    "lucide-preact": "1.68.0",
     "preact": "10.29.8",
     "qrcode": "1.5.4"
   },
