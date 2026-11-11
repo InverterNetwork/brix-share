@@ -24,14 +24,10 @@ export interface StageConfig {
   adminRolePattern: string;
   /** Random suffix of the files bucket name (8 to 16 lower-case letters and digits); fixed once deployed. */
   filesBucketSuffix: string;
-  /** Optional e-mail subscribed to the alarm topic. */
-  alarmEmail?: string;
   /**
    * Deprecated legacy configuration, accepted for saved stage files but ignored by alarm routing.
    */
   alarmTopicArns?: string[];
-  /** Optional monthly AWS Budget (USD) on the app=brix-share cost allocation tag. */
-  budgetUsd?: number;
 }
 
 /** Hosted zone as passed between stacks; `zoneId` may be a cross-stack token. */
@@ -76,9 +72,7 @@ export function readStages(raw: unknown): StageConfig[] {
         customDomain: cfg.customDomain === true,
         filesBucketSuffix: cfg.filesBucketSuffix,
         ...(cfg.siteUrl ? { siteUrl: cfg.siteUrl } : {}),
-        ...(cfg.alarmEmail ? { alarmEmail: cfg.alarmEmail } : {}),
         ...(cfg.alarmTopicArns?.length ? { alarmTopicArns: cfg.alarmTopicArns } : {}),
-        ...(cfg.budgetUsd ? { budgetUsd: cfg.budgetUsd } : {}),
       };
     },
   );

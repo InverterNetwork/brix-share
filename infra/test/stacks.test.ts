@@ -13,6 +13,17 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
     json = JSON.stringify(mainT.toJSON());
   });
 
+  it('creates no owned notification topic or budget consumers', () => {
+    for (const type of [
+      'AWS::SNS::Topic',
+      'AWS::SNS::TopicPolicy',
+      'AWS::SNS::Subscription',
+      'AWS::Budgets::Budget',
+    ]) {
+      mainT.resourceCountIs(type, 0);
+    }
+  });
+
   it('IAM and Events tags have unique keys ignoring case', () => {
     for (const template of [mainT, edgeT, b.zoneT].filter((t) => t !== undefined)) {
       for (const type of [
