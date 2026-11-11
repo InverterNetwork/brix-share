@@ -26,8 +26,6 @@ The file maps stage names to settings:
 | `siteUrl` | no | The `https://<id>.cloudfront.net` URL while `customDomain` is off (the monitor reads it) |
 | `filesBucketSuffix` | yes | 8 to 16 lower-case letters and digits, random, for example `head -c 6 /dev/urandom \| od -An -tx1 \| tr -d ' \n'` |
 | `alarmTopicArns` | no | Deprecated legacy setting, accepted but ignored by service alarms |
-| `alarmEmail` | no | Optional budget email subscriber on the owned topic; no service alarms |
-| `budgetUsd` | no | Monthly AWS Budget on the `app=brix-share` cost allocation tag |
 
 Working locally without access to the variable: use the example, `BRIX_SHARE_STAGES=infra/stages.example.json pnpm synth`. Tests and CI always use the example.
 
@@ -82,7 +80,6 @@ If it refuses because the local build differs from the release manifest: do not 
 2. `AWS_PROFILE=<prod-admin-profile> scripts/deploy-infra.sh <stage>`. Creates the zone stack (not yet delegated, so not in use), the edge stack (WAF) and the main stack. Note the outputs `NameServers` (zone stack) and `SiteUrl` (main stack, `https://<id>.cloudfront.net`).
 3. Put `SiteUrl` into the stage config as `siteUrl` (the monitor reads it), tag a release and deploy it with `deploy-web.ts` (above), verify (below) against `SiteUrl`.
 4. Confirm central warning-topic discovery, source grants and native ALARM/OK delivery to #infra-alerts with the coordinator under separate approval. See Central alarm cutover below.
-5. Optional budget: set `budgetUsd`, and activate the `app` cost allocation tag in the payer (management) account's Billing console.
 
 ### Switching on the custom domain
 
@@ -137,7 +134,7 @@ Rate limits per IP and 5 minutes: create 20, consume 60, challenge 60, everythin
 
 ## Alarms
 
-All service alarms send ALARM and OK to the central warning topic with propagated brix/share labels, routing to #infra-alerts without paging. Alarm names are `BrixShare-<stage>-<Name>`. The owned topic and optional `alarmEmail` subscription serve budget notifications only; `alarmTopicArns` is ignored.
+All service alarms send ALARM and OK to the central warning topic with propagated brix/share labels, routing to #infra-alerts without paging. Alarm names are `BrixShare-<stage>-<Name>`. Saved `alarmTopicArns` values are ignored.
 
 | Alarm | Meaning | First response |
 |---|---|---|
@@ -149,7 +146,6 @@ All service alarms send ALARM and OK to the central warning topic with propagate
 | `ApiThrottles`, `SweeperThrottles` | Reserved concurrency exhausted (api: 20) | Abuse or a traffic spike; WAF and breaker |
 | `TableItemCountHigh` | More than 100k items | Abuse; breaker; check sweeper runs |
 | `FilesBucketSizeHigh` | Files bucket above 10 GB | Abuse via files; breaker; check sweeper and lifecycle |
-| Budget (optional) | Forecast above the monthly budget | Find the cost driver in Cost Explorer |
 
 ## Incidents
 
@@ -213,11 +209,11 @@ What it can and cannot see:
 
 ## Ownership
 
-One named maintainer (PLAN decision 14). Quarterly: dependency review (lockfile diff, 7-day cooldown stays on), re-run the test suites, check central source grants, routing tags and ALARM/OK delivery; check optional budget email subscriptions separately, check CloudFront log retention. Any change to the crypto protocol is a new protocol version with new vectors and a new review.
+One named maintainer (PLAN decision 14). Quarterly: dependency review (lockfile diff, 7-day cooldown stays on), re-run the test suites, check central source grants, routing tags and ALARM/OK delivery; check CloudFront log retention. Any change to the crypto protocol is a new protocol version with new vectors and a new review.
 
 ## Central alarm cutover
 
-All eleven service alarms use `project=brix/share`, their stage environment, and warning severity through the account-local `/platform/v1/alerts/warning-topic-arn` parameter. ALARM and OK selectively propagate project/env/severity; notifications route to #infra-alerts without paging. Existing identities and governor automation stay unchanged. Missing data remains nonbreaching, so adoption creates no new dead-producer condition. Saved `alarmTopicArns` values are deprecated and ignored. The owned Alarms topic and optional email/budget consumers remain available, independently of service alarm delivery.
+All eleven service alarms use `project=brix/share`, their stage environment, and warning severity through the account-local `/platform/v1/alerts/warning-topic-arn` parameter. ALARM and OK selectively propagate project/env/severity; notifications route to #infra-alerts without paging. Existing identities and governor automation stay unchanged. Missing data remains nonbreaching, so adoption creates no new dead-producer condition. Saved `alarmTopicArns` values are deprecated and ignored.
 
 Before deployment, confirm the SSM topic parameter, exact source grants, CloudWatch SNS/KMS permissions and regional native tag propagation support. Confirm out-of-code routes and open legacy incidents with the owner, assigning recovery handling before removing old OK delivery. Approval of the code does not authorize deployment or live tests. If a dev deployment exists, verify native ALARM and OK there before production, including SUCCESS propagation, expected channel and same-parent recovery. Otherwise agree a separately approved bounded production acceptance plan with the coordinator. After deployment inspect alarm states and the channel for false alarms; successful synth is not delivery evidence.
 

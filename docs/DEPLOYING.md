@@ -73,5 +73,5 @@ Account, domain, zone and alert routing are not in the repository. Maintainers k
 ### After a deploy
 
 - The `monitor` workflow checks the live site hourly against the deployed release (files and headers) and alerts Slack if `SLACK_WEBHOOK_URL` is set.
-- Service alarms send ALARM and OK through central warning routing to #infra-alerts. The owned topic and `alarmEmail` serve optional budget notifications only; `alarmTopicArns` is deprecated and ignored. See [Alarms](RUNBOOK.md#alarms) and [Central alarm cutover](RUNBOOK.md#central-alarm-cutover) for setup and verification.
+- Service alarms send ALARM and OK through central warning routing to #infra-alerts. `alarmTopicArns` is deprecated and ignored. See [Alarms](RUNBOOK.md#alarms) and [Central alarm cutover](RUNBOOK.md#central-alarm-cutover) for setup and verification.
 - Circuit breaker, proof-of-work difficulty, full purge, reading access logs: see the runbook.

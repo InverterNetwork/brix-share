@@ -113,6 +113,10 @@ The required CDK 2.275.0 upgrade also synthesizes a CloudFront invoke-function p
 
 Public release rebuilds use scripts/rebuild-web.ts to install the frozen lockfile in a temporary workspace excluding infra and its unused private lockfile records, preserving all public pins, with a fresh store and no registry credentials. CI uses the same path twice. This preserves independent public web verification while infrastructure consumes the private platform package.
 
+### 2026-11-11: Remove the unused owned notification topic (BRIX-2660)
+
+Remove the owned SNS topic and its optional email subscription and budget publisher. All service alarms use central warning routing, and production has no topic consumers. Retire the unused alarmEmail and budgetUsd settings with those consumers. Git history provides rollback.
+
 ## 2026-11-11: Human-written release notes
 
 Create draft GitHub releases with the generated verification section and attested manifest. The release owner adds notes in the shared Initial Release or Production Release format and publishes before deployment. Keep verification output unchanged. Reason: provide readable release history without adding per-release workflow configuration or publishing verification-only notes automatically.
