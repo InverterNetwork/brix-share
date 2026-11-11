@@ -15,6 +15,6 @@
     "check-vectors": "node --experimental-strip-types scripts/gen-vectors.ts --check"
   },
   "dependencies": {
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   }
 }
