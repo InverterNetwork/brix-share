@@ -1,6 +1,6 @@
 name: release
 
-# A release is a v* tag on main. Publishes the manifest of the reproducible build; deploys stay manual
+# A release is a v* tag on main. Drafts the manifest of the reproducible build; deploys stay manual
 # (scripts/deploy-web.ts refuses to deploy a local build that differs from this manifest).
 on:
   push:
@@ -35,16 +35,23 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: manifest.json
-      - name: Publish release
+      - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           commit=$(git rev-parse 'HEAD^{commit}')
           {
+            echo "### Verification"
+            echo
             echo "Web build of \`$commit\`, reproduced twice in CI."
+            echo
+            echo "<details>"
+            echo "<summary>File hashes (SHA-256)</summary>"
             echo
             echo "| SHA-256 | File |"
             echo "|---|---|"
             jq -r '.files | to_entries[] | "| `\(.value)` | `\(.key)` |"' manifest.json
+            echo
+            echo "</details>"
           } > notes.md
-          gh release create "$GITHUB_REF_NAME" manifest.json --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+          gh release create "$GITHUB_REF_NAME" manifest.json --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag --draft

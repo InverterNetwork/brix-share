@@ -26,7 +26,9 @@ From the reviewed commit on main:
 
 ```sh
 git checkout main && git pull
-git tag vX.Y.Z && git push origin vX.Y.Z   # CI builds twice and publishes the attested manifest
+git tag vX.Y.Z && git push origin vX.Y.Z   # CI builds twice and creates a draft with the attested manifest
+# Complete the draft's human-written notes and publish it before deployment.
+# See CONTRIBUTING.md, Release notes.
 git checkout vX.Y.Z
 ```
 

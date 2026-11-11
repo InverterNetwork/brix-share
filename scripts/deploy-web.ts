@@ -3,7 +3,7 @@
  * Usage: AWS_PROFILE=<admin profile> node scripts/deploy-web.ts <stage> <tag> [--dry-run]
  *
  * 1. The working tree must be clean and at <tag>.
- * 2. Builds locally and refuses to continue unless every file equals the release manifest that CI published.
+ * 2. Builds locally and refuses to continue unless every file equals the CI-generated manifest on the published release.
  * 3. Assumes the stage's web deploy role (the only principal the static bucket accepts writes from).
  * 4. Uploads hashed assets first and index.html last, with explicit content types and caching, removes files
  *    older than the previous release, invalidates /index.html and /.
@@ -33,6 +33,13 @@ const run = (cmd: string, argv: string[], env: NodeJS.ProcessEnv = process.env) 
     stdio: ['ignore', 'pipe', 'inherit'],
   }).trim();
 const say = (s: string) => process.stdout.write(`${s}\n`);
+
+// Public verification requires a published release, including for dry runs.
+if (run('gh', ['release', 'view', tag, '--json', 'isDraft', '--jq', '.isDraft']) !== 'false') {
+  throw new Error(
+    `release ${tag} is unpublished; complete its notes and publish it before deployment`,
+  );
+}
 
 // Stage config is not in the repository; the STAGES_JSON repository variable is the source (git-ignored copy).
 writeFileSync(

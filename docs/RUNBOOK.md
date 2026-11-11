@@ -61,7 +61,7 @@ Do not deploy a change to the `createEnabled`, `powDifficulty` or `governor` SSM
 
 ### Web
 
-1. Tag a release on `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `release` workflow builds twice, fails if the builds differ, and publishes `manifest.json` (SHA-256 of every served file) on the GitHub release.
+1. Tag a release on `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `release` workflow builds twice, fails if the builds differ, and creates a draft GitHub release with `manifest.json` (SHA-256 of every served file). Complete the human-written notes and publish the release before deployment; see [Release notes](../CONTRIBUTING.md#release-notes). Keep the generated Verification section unchanged.
 2. Deploy that tag:
 
 ```
@@ -217,4 +217,4 @@ All eleven service alarms use `project=brix/share`, their stage environment, and
 
 Before deployment, confirm the SSM topic parameter, exact source grants, CloudWatch SNS/KMS permissions and regional native tag propagation support. Confirm out-of-code routes and open legacy incidents with the owner, assigning recovery handling before removing old OK delivery. Approval of the code does not authorize deployment or live tests. If a dev deployment exists, verify native ALARM and OK there before production, including SUCCESS propagation, expected channel and same-parent recovery. Otherwise agree a separately approved bounded production acceptance plan with the coordinator. After deployment inspect alarm states and the channel for false alarms; successful synth is not delivery evidence.
 
-Rollback through the approved deployment path restores the prior ALARM/OK actions to the owned topic and configured legacy topics. Keep shared forwarding infrastructure and router incident state intact; resolve or transfer open incidents explicitly. Merging runs CI only. A v* tag builds and publishes release evidence; infrastructure and web deploys remain manual.
+Rollback through the approved deployment path restores the prior ALARM/OK actions to the owned topic and configured legacy topics. Keep shared forwarding infrastructure and router incident state intact; resolve or transfer open incidents explicitly. Merging runs CI only. A v* tag builds release evidence and creates a draft release. The owner adds notes and publishes it before deployment; infrastructure and web deploys remain manual.
