@@ -120,3 +120,7 @@ Remove the owned SNS topic and its optional email subscription and budget publis
 ## 2026-11-11: Human-written release notes
 
 Create draft GitHub releases with the generated verification section and attested manifest. The release owner adds notes in the shared Initial Release or Production Release format and publishes before deployment. Keep verification output unchanged. Reason: provide readable release history without adding per-release workflow configuration or publishing verification-only notes automatically.
+
+## 2026-11-11: Node 24 and paired S3 SDK updates
+
+Align local tooling, CI, Lambda runtimes and bundling on Node 24, with Node 24 types. Upgrade the S3 client and presigner together to preserve SDK type compatibility. Dependabot checks the root pnpm workspace and GitHub Actions monthly with a seven-day cooldown, exempts first-party packages, groups the S3 pair and platform-cdk, and leaves Node types major upgrades tied to the runtime.

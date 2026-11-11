@@ -10,3 +10,14 @@ updates:
     groups:
       platform-cdk:
         patterns: ['@inverternetwork/platform-cdk']
+      s3-sdk:
+        patterns: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner']
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7

@@ -186,9 +186,9 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
     expect(names.some((n) => n.includes('Api Lambda throttled'))).toBe(true);
   });
 
-  it('lambdas: node 22, arm64, 256 MB, reserved concurrency, no tracing, 14-day log groups', () => {
+  it('lambdas: node 24, arm64, 256 MB, reserved concurrency, no tracing, 14-day log groups', () => {
     const fns = resourcesOf(mainT, 'AWS::Lambda::Function').filter(
-      (f) => (f.Properties!.Runtime as string) === 'nodejs22.x' && f.Properties!.MemorySize === 256,
+      (f) => (f.Properties!.Runtime as string) === 'nodejs24.x' && f.Properties!.MemorySize === 256,
     );
     expect(fns).toHaveLength(3);
     for (const f of fns) {

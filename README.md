@@ -264,7 +264,7 @@ The site's [/verify page](https://share.brix.money/verify) repeats these steps, 
 
 ## Repository layout
 
-pnpm workspace, Node 22 (`.nvmrc`):
+pnpm workspace, Node 24 (`.nvmrc`):
 
 | Path | What |
 |---|---|

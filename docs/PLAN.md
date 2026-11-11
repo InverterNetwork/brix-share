@@ -72,7 +72,7 @@ Components:
   - `/api/*` → Lambda Function URL, origin access control (OAC) with IAM signing, so the function URL cannot be called except through CloudFront.
   - everything else → S3 static bucket, OAC, bucket private.
 - AWS WAF web ACL on CloudFront: rate-based rules (section 12), AWS managed common rule set, body size constraint, geo rules off. WAF attaches here because HTTP APIs do not support WAF directly and a CloudFront-only entry point has no bypass path.
-- Lambda `api` (Node 22, TypeScript, single function, minimal router), 256 MB, reserved concurrency as a hard cap (section 12).
+- Lambda `api` (Node 24, TypeScript, single function, minimal router), 256 MB, reserved concurrency as a hard cap (section 12).
 - DynamoDB table `secrets`, on-demand, TTL on `purgeAt` (see section 8), point-in-time recovery OFF, backups OFF, streams OFF, table deletion protection ON. Ephemeral data must not survive in historical copies.
 - S3 bucket `files` (name ends in a random per-stage suffix so it does not reveal the account id; private, SSE-S3, versioning OFF, object lock OFF, no replication), lifecycle rule expiring all objects after 31 days as backstop. Uploads and downloads via presigned URLs issued by the Lambda; CORS on the bucket limited to the site origin, PUT and GET only.
 - Lambda `sweeper` on a 5-minute EventBridge schedule (hourly in the original plan, see DECISIONS.md): tombstones expired secrets and deletes due or orphaned file objects (section 9.6). Reads only the sparse `sweep-due` GSI, not the table.
