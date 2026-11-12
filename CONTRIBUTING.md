@@ -44,7 +44,7 @@ New dependencies need maintainer approval before they are added. Say what the pa
 - pnpm enforces a 7-day release cooldown (`minimumReleaseAge: 10080` in `pnpm-workspace.yaml`), so it holds in CI and on every machine.
 - Build scripts are allowlisted in `pnpm-workspace.yaml` under `allowBuilds` (currently `esbuild` only). Keep the list minimal.
 - Review the lockfile diff on every bump.
-- AWS SDK packages (`@aws-sdk/*`) move together: same release, one lockfile resolution (see `docs/DECISIONS.md`, 2026-11-12).
+- AWS SDK packages (`@aws-sdk/*`) move together, and so do `tailwindcss` and `@tailwindcss/*`: same release, one lockfile resolution (see `docs/DECISIONS.md`, 2026-11-12).
 
 Approved and in use:
 

@@ -12,6 +12,8 @@ updates:
         patterns: ['@inverternetwork/platform-cdk']
       aws-sdk:
         patterns: ['@aws-sdk/*']
+      tailwind:
+        patterns: ['tailwindcss', '@tailwindcss/*']
     ignore:
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
