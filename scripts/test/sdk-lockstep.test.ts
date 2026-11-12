@@ -7,8 +7,13 @@ const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta
 
 it('pins every direct AWS SDK dependency to one release', () => {
   const versions = new Set<string>();
-  for (const pkg of ['api', 'sweeper', 'web']) {
-    const manifest = JSON.parse(read(`${pkg}/package.json`)) as Record<
+  const workspace = read('pnpm-workspace.yaml')
+    .split(/^packages:\n/m)[1]!
+    .split('\n\n')[0]!;
+  const dirs = [...workspace.matchAll(/^ {2}- (\S+)$/gm)].map(([, dir]) => `${dir}/`);
+  expect(dirs).toContain('api/');
+  for (const dir of ['', ...dirs]) {
+    const manifest = JSON.parse(read(`${dir}package.json`)) as Record<
       string,
       Record<string, string> | undefined
     >;
