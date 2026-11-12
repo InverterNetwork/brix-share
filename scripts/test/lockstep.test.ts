@@ -4,6 +4,7 @@ import { expect, it } from 'vitest';
 // DECISIONS 2026-11-12: AWS SDK packages move together. Mixed releases pull separate Smithy copies whose
 // client and command types do not match, which surfaces only as confusing type errors. Tailwind CSS and its
 // Vite plugin move together too: a split leaves the plugin compiling with its own older tailwindcss copy.
+// The Docker E2E image must match @playwright/test, or the local suite runs against the wrong browsers.
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 it.each([
@@ -42,4 +43,14 @@ it('resolves one version of each AWS SDK, Smithy and Tailwind CSS package', () =
     .filter(([, v]) => v.size > 1)
     .map(([n, v]) => `${n}@${[...v].join('|')}`);
   expect(duplicates).toEqual([]);
+});
+
+it('runs the Docker E2E suite in the Playwright image matching @playwright/test', () => {
+  const manifest = JSON.parse(read('web/package.json')) as {
+    devDependencies: Record<string, string>;
+  };
+  const image = /mcr\.microsoft\.com\/playwright:v([^-@\s]+)-[a-z]+@sha256:[0-9a-f]{64}/.exec(
+    read('web/scripts/e2e-docker.sh'),
+  );
+  expect(image?.[1]).toBe(manifest.devDependencies['@playwright/test']);
 });

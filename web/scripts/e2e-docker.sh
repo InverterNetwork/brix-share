@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 WEB="$(pwd)"
 REPO="$(cd .. && pwd)"
-PW_IMAGE="mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27"
+PW_IMAGE="mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f"
 DDB_IMAGE="amazon/dynamodb-local@sha256:ff89bd48ff32cd8d9be5fee8873b65b8854dc408f1afe881be6eb00247bc0dab"
 DDB_PORT="${DDB_PORT:-8011}"
 

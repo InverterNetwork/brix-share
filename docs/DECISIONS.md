@@ -132,3 +132,7 @@ All `@aws-sdk/*` dependencies stay on the same release and are upgraded in one c
 ## 2026-11-12: Tailwind CSS and its Vite plugin move together
 
 `tailwindcss` and `@tailwindcss/*` stay on the same release and are upgraded in one change; Dependabot groups them, and the lockstep script test also covers them. A split is fixed the same way as for the AWS SDK: align the pins, run `pnpm dedupe` and review the lockfile diff. Reason: `@tailwindcss/vite` compiles with the `tailwindcss` copy it depends on, so bumping `tailwindcss` alone leaves two copies in the lockfile and the build on the old compiler.
+
+## 2026-11-12: Playwright and its Docker image move together
+
+The Playwright image pinned in `web/scripts/e2e-docker.sh` (tag and digest) always matches the `@playwright/test` version; a Playwright upgrade updates both in one change, and the lockstep script test fails when they differ. Dependabot does not track the image in a shell script, so its Playwright pull requests need the image update added. Reason: the local Docker suite runs the installed test runner against the browsers baked into the image, and CI installs browsers itself, so a mismatch only shows up locally.
