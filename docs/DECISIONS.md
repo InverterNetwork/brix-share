@@ -128,3 +128,7 @@ Align local tooling, CI, Lambda runtimes and bundling on Node 24, with Node 24 t
 ## 2026-11-12: AWS SDK packages move together
 
 All `@aws-sdk/*` dependencies stay on the same release and are upgraded in one change with a single lockfile resolution, so every client resolves one copy of `@aws-sdk/core`, `@smithy/core` and `@smithy/types`. Dependabot groups `@aws-sdk/*`, and a script test fails when the lockfile holds more than one version of any `@aws-sdk/*` or `@smithy/*` package. If a split appears, align all `@aws-sdk/*` pins on one release, run `pnpm dedupe` and review the lockfile diff (a plain `pnpm install` keeps locked resolutions that still satisfy their ranges, so it does not merge an existing split). Reason: mixed SDK releases pull separate Smithy copies whose client and command types do not match (`DynamoDBDocumentClient.send` rejects commands built against the other copy), which breaks typecheck and lint.
+
+## 2026-11-12: Tailwind CSS and its Vite plugin move together
+
+`tailwindcss` and `@tailwindcss/*` stay on the same release and are upgraded in one change; Dependabot groups them, and the lockstep script test also covers them. A split is fixed the same way as for the AWS SDK: align the pins, run `pnpm dedupe` and review the lockfile diff. Reason: `@tailwindcss/vite` compiles with the `tailwindcss` copy it depends on, so bumping `tailwindcss` alone leaves two copies in the lockfile and the build on the old compiler.
