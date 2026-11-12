@@ -52,5 +52,9 @@ it('runs the Docker E2E suite in the Playwright image matching @playwright/test'
   const image = /mcr\.microsoft\.com\/playwright:v([^-@\s]+)-[a-z]+@sha256:[0-9a-f]{64}/.exec(
     read('web/scripts/e2e-docker.sh'),
   );
-  expect(image?.[1]).toBe(manifest.devDependencies['@playwright/test']);
+  expect(
+    image,
+    'PW_IMAGE must be mcr.microsoft.com/playwright:v<version>-<distro>@sha256:<index digest>',
+  ).not.toBeNull();
+  expect(image![1]).toBe(manifest.devDependencies['@playwright/test']);
 });

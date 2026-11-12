@@ -1,5 +1,6 @@
 version: 2
 updates:
+  # @playwright/test updates also need the image in web/scripts/e2e-docker.sh (docs/DECISIONS.md, 2026-11-12).
   - package-ecosystem: npm
     directory: /
     schedule:
