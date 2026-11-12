@@ -10,8 +10,8 @@ updates:
     groups:
       platform-cdk:
         patterns: ['@inverternetwork/platform-cdk']
-      s3-sdk:
-        patterns: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner']
+      aws-sdk:
+        patterns: ['@aws-sdk/*']
     ignore:
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']

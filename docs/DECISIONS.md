@@ -123,4 +123,8 @@ Create draft GitHub releases with the generated verification section and atteste
 
 ## 2026-11-11: Node 24 and paired S3 SDK updates
 
-Align local tooling, CI, Lambda runtimes and bundling on Node 24, with Node 24 types. Upgrade the S3 client and presigner together to preserve SDK type compatibility. Dependabot checks the root pnpm workspace and GitHub Actions monthly with a seven-day cooldown, exempts first-party packages, groups the S3 pair and platform-cdk, and leaves Node types major upgrades tied to the runtime.
+Align local tooling, CI, Lambda runtimes and bundling on Node 24, with Node 24 types. Upgrade the S3 client and presigner together to preserve SDK type compatibility. Dependabot checks the root pnpm workspace and GitHub Actions monthly with a seven-day cooldown, exempts first-party packages, groups the S3 pair and platform-cdk, and leaves Node types major upgrades tied to the runtime. (Dependabot grouping widened to all AWS SDK packages, see 2026-11-12.)
+
+## 2026-11-12: AWS SDK packages move together
+
+All `@aws-sdk/*` dependencies stay on the same release and are upgraded in one change with a single lockfile resolution, so every client resolves one copy of `@aws-sdk/core`, `@smithy/core` and `@smithy/types`. Dependabot groups `@aws-sdk/*`, and a script test fails when the lockfile holds more than one version of any `@aws-sdk/*` or `@smithy/*` package. If a split appears, align all `@aws-sdk/*` pins on one release, run `pnpm dedupe` and review the lockfile diff (a plain `pnpm install` keeps locked resolutions that still satisfy their ranges, so it does not merge an existing split). Reason: mixed SDK releases pull separate Smithy copies whose client and command types do not match (`DynamoDBDocumentClient.send` rejects commands built against the other copy), which breaks typecheck and lint.
