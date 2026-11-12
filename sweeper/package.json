@@ -10,8 +10,8 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1162.0",
     "@aws-sdk/client-s3": "3.1162.0",
-    "@aws-sdk/client-ssm": "3.1145.0",
-    "@aws-sdk/lib-dynamodb": "3.1145.0",
+    "@aws-sdk/client-ssm": "3.1162.0",
+    "@aws-sdk/lib-dynamodb": "3.1162.0",
     "@brix-share/shared": "workspace:*"
   }
 }
