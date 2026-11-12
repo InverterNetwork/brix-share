@@ -45,6 +45,7 @@ New dependencies need maintainer approval before they are added. Say what the pa
 - Build scripts are allowlisted in `pnpm-workspace.yaml` under `allowBuilds` (currently `esbuild` only). Keep the list minimal.
 - Review the lockfile diff on every bump.
 - AWS SDK packages (`@aws-sdk/*`) move together, and so do `tailwindcss` and `@tailwindcss/*`: same release, one lockfile resolution (see `docs/DECISIONS.md`, 2026-11-12).
+- `@playwright/test` and the Playwright image in `web/scripts/e2e-docker.sh` (tag and digest) move together.
 
 Approved and in use:
 
