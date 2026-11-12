@@ -21,7 +21,7 @@
     "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "esbuild": "0.28.2",
-    "tailwindcss": "4.3.3",
+    "tailwindcss": "4.3.4",
     "vite": "8.3.2"
   }
 }
