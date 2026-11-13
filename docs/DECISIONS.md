@@ -136,3 +136,7 @@ All `@aws-sdk/*` dependencies stay on the same release and are upgraded in one c
 ## 2026-11-12: Playwright and its Docker image move together
 
 The Playwright image pinned in `web/scripts/e2e-docker.sh` (tag and digest) always matches the `@playwright/test` version; a Playwright upgrade updates both in one change, and the lockstep script test fails when they differ. Dependabot does not track the image in a shell script, so its Playwright pull requests need the image update added. Reason: the local Docker suite runs the installed test runner against the browsers baked into the image, and CI installs browsers itself, so a mismatch only shows up locally.
+
+## 2026-11-13: Structured service alarm presentation
+
+Use platform-cdk 1.2.1 presentation sections on all eleven service alarms with the uniform service name Brix Share. Include customer impact, affected users or components, first response and existing runbook anchors. Create-rate alerts describe the automatic Governor brake. Alarm identities, evaluation, routing and automation remain unchanged.

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { Match } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -472,7 +473,31 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
     for (const a of alarms) {
       const props = a.Properties!;
       expect(props.AlarmName).toMatch(new RegExp(`^BrixShare-${stage.name}-[A-Za-z0-9]+$`));
-      expect(String(props.AlarmDescription).length).toBeLessThanOrEqual(400);
+      const description = String(props.AlarmDescription);
+      expect(Buffer.byteLength(description, 'utf8')).toBeLessThanOrEqual(1024);
+      const [human, encoded] = description.split('\n[platform-alert:v1]\n');
+      expect(human!.length).toBeLessThanOrEqual(400);
+      const presentation = JSON.parse(encoded!) as Record<string, unknown>;
+      expect(presentation.service).toBe('Brix Share');
+      for (const field of ['problem', 'customerImpact', 'affected', 'doNow', 'runbook']) {
+        expect(presentation[field]).toBeTruthy();
+      }
+      expect(presentation.product).toBeUndefined();
+      const runbook = String(presentation.runbook);
+      expect(runbook).toMatch(
+        /^https:\/\/github\.com\/InverterNetwork\/brix-share\/blob\/main\/docs\/RUNBOOK\.md#[a-z-]+$/,
+      );
+      const anchors = [
+        ...readFileSync(new URL('../../docs/RUNBOOK.md', import.meta.url), 'utf8').matchAll(
+          /^##+ (.+)$/gm,
+        ),
+      ].map((match) =>
+        match[1]!
+          .toLowerCase()
+          .replace(/[^a-z0-9 -]/g, '')
+          .replace(/ /g, '-'),
+      );
+      expect(anchors).toContain(runbook.split('#')[1]);
       expect(props.AlarmActions).toHaveLength(1);
       expect(props.OKActions).toEqual(props.AlarmActions);
       const action = (props.AlarmActions as { Ref: string }[])[0]!;

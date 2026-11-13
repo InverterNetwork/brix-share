@@ -565,13 +565,125 @@ export class BrixShareStack extends Stack {
     );
 
     requireAlarmRouting(this);
+    const alarmDescriptions: Record<string, string> = {
+      CreateRateHigh:
+        'More than 42 secrets were created in two of three five-minute periods. This triggers the Governor automatic brake.',
+      CreatesDailyHigh: 'More than 2000 secrets were created in 24 hours.',
+      ConsumeRateHigh: 'More than 3000 secret retrievals were recorded in one hour.',
+      Api5xx: 'The API returned at least five server errors in five minutes.',
+      ApiErrors: 'The API Lambda recorded at least three invocation errors in five minutes.',
+      SweeperErrors:
+        'The Sweeper Lambda recorded at least three invocation errors in five minutes.',
+      GovernorErrors:
+        'The Governor Lambda recorded at least three invocation errors in five minutes.',
+      ApiThrottles: 'The API Lambda was throttled at least once in five minutes.',
+      SweeperThrottles: 'The Sweeper Lambda was throttled at least once in five minutes.',
+      TableItemCountHigh:
+        'The secrets table has more than 100000 items according to the hourly Sweeper count.',
+      FilesBucketSizeHigh: 'The daily storage metric reports more than 10 GiB in the files bucket.',
+    };
+    const presentations: Record<
+      string,
+      { problem: string; customerImpact: string; affected: string; doNow: string; runbook: string }
+    > = {
+      CreateRateHigh: {
+        problem: 'Too many secrets created',
+        customerImpact: 'Creating shares may take longer or be disabled by the Governor',
+        affected: 'People creating shares on share.brix.money',
+        doNow:
+          'Check Governor logs and the governor, powDifficulty and createEnabled SSM parameters. Compare API create counts with WAF metrics.',
+        runbook:
+          'https://github.com/InverterNetwork/brix-share/blob/main/docs/RUNBOOK.md#proof-of-work-difficulty',
+      },
+      CreatesDailyHigh: {
+        problem: 'Too many secrets created today',
+        customerImpact: 'Not confirmed yet, check for abuse affecting new shares',
+        affected: 'People creating shares on share.brix.money',
+        doNow:
+          'Check API create counts and WAF metrics. Read createEnabled and powDifficulty before considering the circuit breaker.',
+        runbook: 'https://github.com/InverterNetwork/brix-share/blob/main/docs/RUNBOOK.md#alarms',
+      },
+      ConsumeRateHigh: {
+        problem: 'Too many secrets opened',
+        customerImpact: 'Not confirmed yet, opening shares may be affected by excess traffic',
+        affected: 'People opening shares on share.brix.money',
+        doNow:
+          'Compare API consume counts with WAF metrics. Follow the access-log procedure if a concrete abuse investigation is needed.',
+        runbook: 'https://github.com/InverterNetwork/brix-share/blob/main/docs/RUNBOOK.md#alarms',
+      },
+      Api5xx: {
+        problem: 'API errors high',
+        customerImpact: 'Creating or opening shares may fail',
+        affected: 'People using share.brix.money',
+        doNow:
+          'Open the API Lambda log group and find error events. Compare error names with the latest deployment.',
+        runbook: 'https://github.com/InverterNetwork/brix-share/blob/main/docs/RUNBOOK.md#alarms',
+      },
+      ApiErrors: {
+        problem: 'API requests failing',
+        customerImpact: 'Creating or opening shares may fail',
+        affected: 'People using share.brix.money',
+        doNow:
+          'Open the API Lambda log group and inspect the latest errors. Check whether they began after a deployment.',
+        runbook: 'https://github.com/InverterNetwork/brix-share/blob/main/docs/RUNBOOK.md#alarms',
+      },
+      SweeperErrors: {
+        problem: 'Expired share cleanup failing',
+        customerImpact: 'Expired shares stay inaccessible, but encrypted files may remain longer',
+        affected: 'Expired share records and encrypted file cleanup',
+        doNow:
+          'Open the Sweeper Lambda log group and inspect the latest errors. Check its recent scheduled runs.',
+        runbook: 'https://github.com/InverterNetwork/brix-share/blob/main/docs/RUNBOOK.md#alarms',
+      },
+      GovernorErrors: {
+        problem: 'Automatic abuse brake failing',
+        customerImpact: 'Abuse may slow new shares, or existing creation restrictions may persist',
+        affected: 'Automatic proof-of-work and creation controls',
+        doNow:
+          'Open Governor logs and inspect the latest errors. Read governor, powDifficulty and createEnabled in SSM to check the current brake state.',
+        runbook:
+          'https://github.com/InverterNetwork/brix-share/blob/main/docs/RUNBOOK.md#proof-of-work-difficulty',
+      },
+      ApiThrottles: {
+        problem: 'API requests throttled',
+        customerImpact: 'Creating or opening shares may fail or take longer',
+        affected: 'People using share.brix.money',
+        doNow:
+          'Check API Lambda concurrency and throttle metrics, then compare WAF traffic. Read createEnabled before considering the circuit breaker.',
+        runbook: 'https://github.com/InverterNetwork/brix-share/blob/main/docs/RUNBOOK.md#alarms',
+      },
+      SweeperThrottles: {
+        problem: 'Expired share cleanup delayed',
+        customerImpact: 'Expired shares stay inaccessible, but encrypted files may remain longer',
+        affected: 'Expired share records and encrypted file cleanup',
+        doNow:
+          'Check Sweeper Lambda concurrency and recent run durations. Open its logs to see whether the previous cleanup run is still active.',
+        runbook: 'https://github.com/InverterNetwork/brix-share/blob/main/docs/RUNBOOK.md#alarms',
+      },
+      TableItemCountHigh: {
+        problem: 'Too many stored share records',
+        customerImpact: 'Not confirmed yet, check for abuse or delayed cleanup',
+        affected: 'Stored share records and new share creation',
+        doNow:
+          'Check Sweeper logs for cleanup errors and the latest item count. Compare API create counts and read createEnabled before considering the breaker.',
+        runbook: 'https://github.com/InverterNetwork/brix-share/blob/main/docs/RUNBOOK.md#alarms',
+      },
+      FilesBucketSizeHigh: {
+        problem: 'Stored files exceed 10 GB',
+        customerImpact: 'Not confirmed yet, check for file abuse or delayed cleanup',
+        affected: 'Encrypted files uploaded through share.brix.money',
+        doNow:
+          'Check Sweeper logs for file cleanup errors. Inspect bucket lifecycle settings and compare recent file-upload traffic.',
+        runbook: 'https://github.com/InverterNetwork/brix-share/blob/main/docs/RUNBOOK.md#alarms',
+      },
+    };
     const alarm = (id: string, props: cloudwatch.AlarmProps) => {
       // Keep names and construct paths stable when changing delivery.
       const a = new cloudwatch.Alarm(this, id, {
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
         ...props,
         alarmName: `BrixShare-${stage.name}-${id}`,
-        alarmDescription: `Brix Share (${stage.name}): ${props.alarmDescription ?? id}`,
+        alarmDescription: alarmDescriptions[id]!,
       });
       labelAlarm(
         a,
@@ -580,14 +692,13 @@ export class BrixShareStack extends Stack {
           env: stage.name as 'dev' | 'staging' | 'prod',
           severity: 'warning',
         },
-        { ok: true },
+        { ok: true, presentation: { service: 'Brix Share', ...presentations[id]! } },
       );
       return a;
     };
 
     // Roughly 500 creates per hour, evaluated in 5-minute buckets so the governor reacts quickly.
     const createRate = alarm('CreateRateHigh', {
-      alarmDescription: 'Creates above ~500/hour. Drives the proof-of-work governor.',
       metric: creates.with({ statistic: 'Sum', period: Duration.minutes(5) }),
       threshold: 42,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
@@ -596,21 +707,18 @@ export class BrixShareStack extends Stack {
     });
     // Slow, steady abuse stays under the 5-minute governor trigger; a daily total catches it.
     alarm('CreatesDailyHigh', {
-      alarmDescription: 'More than 2000 creates in 24 hours.',
       metric: creates.with({ statistic: 'Sum', period: Duration.days(1) }),
       threshold: 2000,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       evaluationPeriods: 1,
     });
     alarm('ConsumeRateHigh', {
-      alarmDescription: 'Consumes above 3000/hour.',
       metric: consumes.with({ statistic: 'Sum', period: Duration.hours(1) }),
       threshold: 3000,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       evaluationPeriods: 1,
     });
     alarm('Api5xx', {
-      alarmDescription: 'API answered 5xx at least 5 times in 5 minutes.',
       metric: api5xx.with({ statistic: 'Sum', period: Duration.minutes(5) }),
       threshold: 5,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
@@ -622,7 +730,6 @@ export class BrixShareStack extends Stack {
       ['Governor', governor.fn],
     ] as const) {
       alarm(`${name}Errors`, {
-        alarmDescription: `${name} Lambda invocation errors.`,
         metric: f.metricErrors({ period: Duration.minutes(5), statistic: 'Sum' }),
         threshold: 3,
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
@@ -631,7 +738,6 @@ export class BrixShareStack extends Stack {
       // The governor runs with concurrency 1 and two triggers; a throttled overlap is retried, not an incident.
       if (name === 'Governor') continue;
       alarm(`${name}Throttles`, {
-        alarmDescription: `${name} Lambda throttled (reserved concurrency exhausted).`,
         metric: f.metricThrottles({ period: Duration.minutes(5), statistic: 'Sum' }),
         threshold: 1,
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
@@ -639,15 +745,12 @@ export class BrixShareStack extends Stack {
       });
     }
     alarm('TableItemCountHigh', {
-      alarmDescription:
-        'More than 100k items in the secrets table (reported hourly by the sweeper).',
       metric: itemCount.with({ statistic: 'Maximum', period: Duration.hours(1) }),
       threshold: 100_000,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       evaluationPeriods: 1,
     });
     alarm('FilesBucketSizeHigh', {
-      alarmDescription: 'Files bucket above 10 GB.',
       metric: new cloudwatch.Metric({
         namespace: 'AWS/S3',
         metricName: 'BucketSizeBytes',
