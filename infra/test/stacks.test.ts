@@ -181,10 +181,10 @@ describe.each(built.map((b) => [b.label, b] as const))('stage %s', (_name, b) =>
 
   it('no throttle alarm on the single-concurrency governor', () => {
     const names = resourcesOf(mainT, 'AWS::CloudWatch::Alarm').map((a) =>
-      JSON.stringify(a.Properties!.AlarmDescription),
+      String(a.Properties!.AlarmName),
     );
-    expect(names.some((n) => n.includes('Governor Lambda throttled'))).toBe(false);
-    expect(names.some((n) => n.includes('Api Lambda throttled'))).toBe(true);
+    expect(names.some((n) => n.endsWith('-GovernorThrottles'))).toBe(false);
+    expect(names.some((n) => n.endsWith('-ApiThrottles'))).toBe(true);
   });
 
   it('lambdas: node 24, arm64, 256 MB, reserved concurrency, no tracing, 14-day log groups', () => {
