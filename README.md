@@ -12,7 +12,7 @@
 
 - No accounts, no cookies, no analytics. Anyone can create a secret.
 - A secret is an optional title, text up to 64 KB and up to 10 files (25 MB in total). Title, text, file names and file contents are encrypted.
-- Access policy chosen at creation: burn after reading (default), up to 100 retrievals, or unlimited until expiry; expiry from about 6 minutes to 30 days (presets 1 hour to 30 days, default 7 days); optional "release later" date; optional passphrase for a second channel (a generated five-word phrase by default).
+- Access policy chosen at creation: burn after reading (default), up to 100 retrievals, or unlimited until expiry; expiry from 6 minutes (the 5-minute minimum plus a 1-minute clock margin) to 30 days (presets 1 hour to 30 days, default 7 days); optional "release later" date; optional passphrase for a second channel (a generated five-word phrase by default).
 - The manage link shows status, every retrieval with time and country (never IP addresses) and lets you delete the secret at once. After a secret ends, a metadata-only history stays readable for 30 days.
 - Link previews (Slack, Teams, mail scanners) do not consume anything: the secret is only retrieved when the recipient clicks "Reveal secret". The reveal request requires a token derived from the link key, so knowing only the path cannot use up retrievals or poll availability; the manage page shows when and from where.
 - Works on desktop and phones, Brix branding, dark only.
